@@ -21,11 +21,14 @@ export default function Layout({ children, showNavButtons = true }: LayoutProps)
     <div style={{
       backgroundColor: '#0b0f19',
       minHeight: '100vh',
+      width: '100%',
       color: '#ffffff',
       fontFamily: 'system-ui, -apple-system, sans-serif',
-      paddingBottom: '20px'
+      display: 'flex',
+      flexDirection: 'column',
+      overflowY: 'auto'
     }}>
-      {/* پروفیشنل اور فکسڈ موبائل ریسپانسیو ہیڈر */}
+      {/* ہیڈر */}
       <header style={{
         backgroundColor: '#1c2541',
         borderBottom: '1px solid #334155',
@@ -44,7 +47,7 @@ export default function Layout({ children, showNavButtons = true }: LayoutProps)
           gap: '8px'
         }}>
           
-          {/* نیویگیشن بٹنز (ہوم اور لاگ آؤٹ) */}
+          {/* نیویگیشن بٹنز */}
           {showNavButtons && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
               <button
@@ -90,7 +93,7 @@ export default function Layout({ children, showNavButtons = true }: LayoutProps)
             </div>
           )}
 
-          {/* مین برانڈ کا نام اور عنوان */}
+          {/* عنوان */}
           <div style={{ textTransform: 'capitalize', textAlign: 'right', overflow: 'hidden' }}>
             <h1 style={{
               margin: 0,
@@ -108,7 +111,7 @@ export default function Layout({ children, showNavButtons = true }: LayoutProps)
             </p>
           </div>
 
-          {/* لوگو آئیکن */}
+          {/* لوگو */}
           <div style={{
             backgroundColor: '#0f172a',
             border: '1px solid #3b82f6',
@@ -126,10 +129,24 @@ export default function Layout({ children, showNavButtons = true }: LayoutProps)
         </div>
       </header>
 
-      {/* مرکزی مواد */}
-      <main style={{ padding: '12px 10px', maxWidth: '1400px', margin: '0 auto' }}>
+      {/* باڈی کنٹینٹ (سکرولنگ سپورٹ کے ساتھ) */}
+      <main style={{ padding: '12px 10px', maxWidth: '1400px', width: '100%', margin: '0 auto', flex: 1, boxSizing: 'border-box' }}>
         {children}
       </main>
+
+      {/* فٹر */}
+      <footer style={{
+        backgroundColor: '#1c2541',
+        borderTop: '1px solid #334155',
+        padding: '12px',
+        textAlign: 'center',
+        marginTop: 'auto',
+        fontSize: '11px',
+        color: '#94a3b8'
+      }}>
+        <p style={{ margin: 0 }}>© 2026 خان فائبر انٹرنیٹ نیٹ ورک - جملہ حقوق محفوظ ہیں۔</p>
+        <p style={{ margin: '3px 0 0 0', fontSize: '10px', color: '#64748b' }}>Powered by Saqaa Software Services</p>
+      </footer>
     </div>
   );
 }
