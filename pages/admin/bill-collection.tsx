@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../../components/Layout';
 import { supabase } from '../../lib/supabaseClient';
+import { openWhatsAppDirect } from '../../lib/whatsapp';
 import { 
   Receipt, 
   Search, 
@@ -98,12 +99,12 @@ export default function BillCollection() {
       } else {
         setIsSuccess(true);
 
-        // 2. واٹس ایپ پر رسید بھیجیں
+        // 2. ڈائریکٹ واٹس ایپ کھولیں
         const targetPhone = selectedCustomer.whatsapp || selectedCustomer.phone;
         
         if (targetPhone) {
           const whatsappMsg = 
-            `*خان فائبر انٹرنیٹ نیٹ ورک - بل رسید*\n` +
+            `*خان فائبر انٹرنیٹ نیٹ ورک - بل رسید*\n\n` +
             `محترم *${selectedCustomer.full_name}*!\n` +
             `آپ کی بل وصولی کامیابی سے درج کر لی گئی ہے۔\n\n` +
             `▫️ پچھلا بقایا: Rs ${previousArrears}\n` +
@@ -113,18 +114,8 @@ export default function BillCollection() {
             `🔻 *بقیہ واجبات:* Rs ${remainingBalance}\n\n` +
             `شکریہ! خان فائبر ٹیم`;
 
-          try {
-            await fetch('/api/send-whatsapp', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                phone: targetPhone,
-                message: whatsappMsg
-              })
-            });
-          } catch (waErr) {
-            console.error('WhatsApp API Error:', waErr);
-          }
+          // واٹس ایپ اوپن کریں
+          openWhatsAppDirect(targetPhone, whatsappMsg);
         }
 
         setPaidAmount('');
@@ -170,7 +161,7 @@ export default function BillCollection() {
         {isSuccess && (
           <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', color: '#34d399', padding: '10px 14px', borderRadius: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <CheckCircle2 size={16} />
-            بل محفوظ ہو گیا اور واٹس ایپ رسید بھیج دی گئی ہے!
+            بل محفوظ ہو گیا اور واٹس ایپ ونڈو کھول دی گئی ہے!
           </div>
         )}
 
