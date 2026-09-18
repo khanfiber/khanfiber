@@ -9,9 +9,19 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/auth-helpers-react": "^0.15.0",
+    "@supabase/supabase-js": "^2.116.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "axios": "^1.20.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.43.0",
     "next": "16.3.4",
+    "node-routeros": "^1.6.8",
+    "qrcode-terminal": "^0.12.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "tailwind-merge": "^3.6.0",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

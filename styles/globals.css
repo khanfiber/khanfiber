@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  font-family: 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, sans-serif !important;
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* سکرول بار کا ڈیزائن */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
