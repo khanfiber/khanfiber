@@ -9,16 +9,15 @@
   margin: 0;
   padding: 0;
 }
-
 html, body {
-  font-family: 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, sans-serif !important;
+  font-family: 'Noto Nastaliq Urdu', 'Segoe UI', Tahoma, sans-serif;
   background-color: #0f172a !important;
   color: #f8fafc !important;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
+  min-height: 100vh;
+  width: 100%;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
 }
-
 /* سکرول بار کا ڈیزائن */
 ::-webkit-scrollbar {
   width: 6px;
