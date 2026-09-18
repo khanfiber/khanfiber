@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../../components/Layout';
-import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { 
   FileText, 
-  ArrowRight, 
   Search, 
   RefreshCw, 
   CheckCircle2, 
   Clock, 
   Users,
-  DollarSign,
-  AlertCircle
+  TrendingUp,
+  CreditCard
 } from 'lucide-react';
 
 interface CustomerStatusType {
@@ -32,58 +30,82 @@ export default function CollectionListPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [fetching, setFetching] = useState(true);
 
-  // Supabase سے کسٹمرز اور ان کی آخری بلنگ وصولی فیچ کریں
+  // لائیو اینالیٹکس رقوم
+  const [totals, setTotals] = useState({
+    collectedAmount: 0,
+    pendingAmount: 0
+  });
+
+  // Supabase سے کسٹمرز اور ان کی بلنگ ہسٹری حاصل کرنا
   const fetchData = async () => {
     setFetching(true);
-    
-    // Step A: تمام کسٹمرز حاصل کریں
-    const { data: custData } = await supabase.from('customers').select('*');
-    
-    // Step B: تمام وصولی (collections) کی تاریخ حاصل کریں
-    const { data: colData } = await supabase
-      .from('collections')
-      .select('*')
-      .order('id', { ascending: false });
+    try {
+      // Step 1: تمام صارفین
+      const { data: custData } = await supabase.from('customers').select('*');
+      
+      // Step 2: تمام بل وصولیاں
+      const { data: colData } = await supabase
+        .from('collections')
+        .select('*')
+        .order('id', { ascending: false });
 
-    if (custData) {
-      const formattedList: CustomerStatusType[] = custData.map((c) => {
-        // اس کسٹمر کا سب سے آخری وصولی ریکارڈ تلاش کریں
-        const customerCol = colData?.find((col) => col.customer_id === c.id);
+      if (custData) {
+        let totalCollected = 0;
+        let totalPending = 0;
 
-        const remaining = customerCol ? customerCol.remaining_balance : c.monthly_price;
-        const lastPaid = customerCol ? customerCol.paid_amount : 0;
-        
-        // اگر بقیہ رقم 0 یا اس سے کم ہو تو وصول، ورنہ پینڈنگ
-        const isPaid = customerCol ? remaining <= 0 : false;
+        const formattedList: CustomerStatusType[] = custData.map((c) => {
+          // کسٹمر کی سب سے آخری وصولی ہسٹری
+          const customerCols = colData?.filter((col) => col.customer_id === c.id) || [];
+          const customerLatestCol = customerCols[0];
 
-        return {
-          id: c.id,
-          full_name: c.full_name || 'نامعلوم',
-          father_name: c.father_name || '---',
-          pppoe_username: c.pppoe_username || '---',
-          phone: c.phone || '---',
-          monthly_price: c.monthly_price || 0,
-          last_paid_amount: lastPaid,
-          remaining_balance: remaining,
-          is_paid: isPaid
-        };
-      });
+          // مجموعی ادا شدہ اور بقیہ رقم
+          const remaining = customerLatestCol ? Number(customerLatestCol.remaining_balance || 0) : Number(c.monthly_price || 0);
+          const lastPaid = customerLatestCol ? Number(customerLatestCol.paid_amount || 0) : 0;
+          
+          const isPaid = remaining <= 0;
 
-      setCustomers(formattedList);
+          if (isPaid) {
+            totalCollected += lastPaid;
+          } else {
+            totalPending += remaining;
+          }
+
+          return {
+            id: c.id,
+            full_name: c.full_name || 'نامعلوم',
+            father_name: c.father_name || '---',
+            pppoe_username: c.pppoe_username || '---',
+            phone: c.phone || '---',
+            monthly_price: Number(c.monthly_price || 0),
+            last_paid_amount: lastPaid,
+            remaining_balance: remaining,
+            is_paid: isPaid
+          };
+        });
+
+        setCustomers(formattedList);
+        setTotals({
+          collectedAmount: totalCollected,
+          pendingAmount: totalPending
+        });
+      }
+    } catch (err) {
+      console.error('Fetch Collection Error:', err);
+    } finally {
+      setFetching(false);
     }
-    setFetching(false);
   };
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  // اینالیٹکس کاؤنٹرز (Stats Counters)
+  // شمار
   const totalUsers = customers.length;
   const paidCount = customers.filter(c => c.is_paid).length;
   const pendingCount = customers.filter(c => !c.is_paid).length;
 
-  // سرچ کی بنیاد پر فلٹر
+  // سرچ و فلٹر
   const filteredCustomers = customers.filter((c) => {
     const matchesTab = activeTab === 'paid' ? c.is_paid : !c.is_paid;
     const search = searchTerm.toLowerCase();
@@ -97,129 +119,112 @@ export default function CollectionListPage() {
 
   return (
     <Layout showNavButtons={true}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
         
-        {/* 1. ٹاپ بار */}
+        {/* 1. مختصر ٹاپ ہیڈر */}
         <div style={{ 
           display: 'flex', 
-          justifyContent: 'space-between', 
           alignItems: 'center', 
+          justifyContent: 'space-between',
           backgroundColor: '#1c2541', 
-          padding: '14px 20px', 
-          borderRadius: '16px', 
+          padding: '10px 14px', 
+          borderRadius: '12px', 
           border: '1px solid #3b82f6' 
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ backgroundColor: 'rgba(139, 92, 246, 0.2)', padding: '10px', borderRadius: '12px', color: '#a78bfa' }}>
-              <FileText size={24} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ backgroundColor: 'rgba(139, 92, 246, 0.2)', padding: '6px', borderRadius: '8px', color: '#a78bfa' }}>
+              <FileText size={18} />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#f472b6' }}>
-                لسٹ پیمنٹ وصولی (Collection Status List)
+              <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#f472b6' }}>
+                لسٹ پیمنٹ وصولی (Collection Status)
               </h2>
-              <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#93c5fd' }}>
-                وصول شدہ اور پینڈنگ بلز کی مکمل رپورٹ اور فلٹر لسٹ
+              <p style={{ margin: 0, fontSize: '9px', color: '#93c5fd' }}>
+                Supabase لائیو وصولی اور پینڈنگ ریکارڑ لسٹ
               </p>
             </div>
           </div>
-
-          <Link href="/admin/dashboard" style={{ 
-            backgroundColor: '#0f172a', 
-            color: '#38bdf8', 
-            padding: '8px 16px', 
-            borderRadius: '10px', 
-            fontSize: '12px', 
-            textDecoration: 'none', 
-            fontWeight: 'bold', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px',
-            border: '1px solid #334155'
-          }}>
-            <ArrowRight size={16} />
-            ڈیش بورڈ پر واپس جائیں
-          </Link>
         </div>
 
-        {/* 2. ٹاپ کاؤنٹرز (Analytics Cards) */}
+        {/* 2. اینالیٹکس کاؤنٹرز (2-Grid Mobile Responsive) */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '14px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: '10px',
           width: '100%'
         }}>
           {/* کل صارفین */}
-          <div style={{ backgroundColor: '#1c2541', border: '1px solid #3b82f6', borderRadius: '14px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ backgroundColor: '#1c2541', border: '1px solid #3b82f6', borderRadius: '10px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <p style={{ margin: 0, fontSize: '12px', color: '#93c5fd' }}>کل صارفین (Total)</p>
-              <h3 style={{ margin: '4px 0 0 0', fontSize: '22px', fontWeight: 'bold', color: '#ffffff' }}>{totalUsers}</h3>
+              <p style={{ margin: 0, fontSize: '10px', color: '#93c5fd' }}>کل صارفین</p>
+              <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold', color: '#ffffff' }}>{totalUsers}</h3>
             </div>
-            <div style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', padding: '10px', borderRadius: '10px', color: '#60a5fa' }}>
-              <Users size={24} />
+            <div style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', padding: '6px', borderRadius: '6px', color: '#60a5fa' }}>
+              <Users size={16} />
             </div>
           </div>
 
           {/* وصول شدہ */}
-          <div style={{ backgroundColor: '#1c2541', border: '1px solid #10b981', borderRadius: '14px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ backgroundColor: '#1c2541', border: '1px solid #10b981', borderRadius: '10px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <p style={{ margin: 0, fontSize: '12px', color: '#93c5fd' }}>وصول شدہ بل (Collected)</p>
-              <h3 style={{ margin: '4px 0 0 0', fontSize: '22px', fontWeight: 'bold', color: '#34d399' }}>{paidCount}</h3>
+              <p style={{ margin: 0, fontSize: '10px', color: '#93c5fd' }}>وصول شدہ (Rs {totals.collectedAmount})</p>
+              <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold', color: '#34d399' }}>{paidCount} یوزرز</h3>
             </div>
-            <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', padding: '10px', borderRadius: '10px', color: '#34d399' }}>
-              <CheckCircle2 size={24} />
+            <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', padding: '6px', borderRadius: '6px', color: '#34d399' }}>
+              <TrendingUp size={16} />
             </div>
           </div>
 
           {/* بقیہ پینڈنگ */}
-          <div style={{ backgroundColor: '#1c2541', border: '1px solid #ef4444', borderRadius: '14px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ backgroundColor: '#1c2541', border: '1px solid #ef4444', borderRadius: '10px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gridColumn: 'span 1 / -1' }}>
             <div>
-              <p style={{ margin: 0, fontSize: '12px', color: '#93c5fd' }}>پینڈنگ بل (Pending)</p>
-              <h3 style={{ margin: '4px 0 0 0', fontSize: '22px', fontWeight: 'bold', color: '#f87171' }}>{pendingCount}</h3>
+              <p style={{ margin: 0, fontSize: '10px', color: '#93c5fd' }}>پینڈنگ واجبات (Rs {totals.pendingAmount})</p>
+              <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold', color: '#f87171' }}>{pendingCount} یوزرز پینڈنگ</h3>
             </div>
-            <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', padding: '10px', borderRadius: '10px', color: '#f87171' }}>
-              <Clock size={24} />
+            <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', padding: '6px', borderRadius: '6px', color: '#f87171' }}>
+              <CreditCard size={16} />
             </div>
           </div>
         </div>
 
-        {/* 3. سرچ اور سوئچر ٹیبز (Switcher Bar) */}
+        {/* 3. سوئچر ٹیبز و سرچ بار */}
         <div style={{ 
           backgroundColor: '#1c2541', 
-          borderRadius: '16px', 
-          padding: '16px', 
+          borderRadius: '12px', 
+          padding: '12px', 
           border: '1px solid #334155',
           display: 'flex',
           flexDirection: 'column',
-          gap: '14px'
+          gap: '10px'
         }}>
           {/* ٹیب سوئچر */}
           <div style={{
             backgroundColor: '#0f172a',
-            padding: '6px',
-            borderRadius: '12px',
+            padding: '4px',
+            borderRadius: '8px',
             border: '1px solid #334155',
             display: 'flex',
-            gap: '8px'
+            gap: '6px'
           }}>
             <button
               onClick={() => setActiveTab('pending')}
               style={{
                 flex: 1,
-                padding: '10px',
-                borderRadius: '8px',
+                padding: '8px',
+                borderRadius: '6px',
                 border: 'none',
                 backgroundColor: activeTab === 'pending' ? '#991b1b' : 'transparent',
                 color: activeTab === 'pending' ? '#ffffff' : '#94a3b8',
                 fontWeight: 'bold',
-                fontSize: '13px',
+                fontSize: '11px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: '4px'
               }}
             >
-              <Clock size={16} />
+              <Clock size={14} />
               پینڈنگ لسٹ ({pendingCount})
             </button>
 
@@ -227,31 +232,31 @@ export default function CollectionListPage() {
               onClick={() => setActiveTab('paid')}
               style={{
                 flex: 1,
-                padding: '10px',
-                borderRadius: '8px',
+                padding: '8px',
+                borderRadius: '6px',
                 border: 'none',
                 backgroundColor: activeTab === 'paid' ? '#065f46' : 'transparent',
                 color: activeTab === 'paid' ? '#ffffff' : '#94a3b8',
                 fontWeight: 'bold',
-                fontSize: '13px',
+                fontSize: '11px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: '4px'
               }}
             >
-              <CheckCircle2 size={16} />
+              <CheckCircle2 size={14} />
               وصول لسٹ ({paidCount})
             </button>
           </div>
 
-          {/* سرچ بار اور ریفریش */}
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {/* سرچ ان پٹ */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <div style={{ position: 'relative', flex: 1 }}>
               <input 
                 type="text"
-                placeholder="صارف کے نام، PPPoE یوزر نیم یا فون سے سرچ کریں..."
+                placeholder="نام، PPPoE یوزر نیم یا فون سے سرچ کریں..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{
@@ -259,12 +264,12 @@ export default function CollectionListPage() {
                   backgroundColor: '#0f172a',
                   border: '1px solid #3b82f6',
                   color: '#ffffff',
-                  padding: '10px 12px 10px 38px',
-                  borderRadius: '10px',
-                  fontSize: '13px'
+                  padding: '8px 10px 8px 32px',
+                  borderRadius: '8px',
+                  fontSize: '12px'
                 }}
               />
-              <Search size={18} style={{ position: 'absolute', right: '12px', top: '11px', color: '#64748b' }} />
+              <Search size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b' }} />
             </div>
 
             <button 
@@ -273,86 +278,85 @@ export default function CollectionListPage() {
                 backgroundColor: '#0f172a',
                 color: '#38bdf8',
                 border: '1px solid #334155',
-                padding: '10px 16px',
-                borderRadius: '10px',
+                padding: '8px 12px',
+                borderRadius: '8px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                fontSize: '13px',
+                gap: '4px',
+                fontSize: '11px',
                 fontWeight: 'bold'
               }}
             >
-              <RefreshCw size={16} className={fetching ? 'animate-spin' : ''} />
+              <RefreshCw size={14} className={fetching ? 'animate-spin' : ''} />
               ریفریش
             </button>
           </div>
         </div>
 
-        {/* 4. وصولی / پینڈنگ ٹیبل */}
+        {/* 4. ٹیبل لسٹ */}
         <div style={{ 
           backgroundColor: '#1c2541', 
-          borderRadius: '20px', 
-          padding: '20px', 
+          borderRadius: '12px', 
+          padding: '12px', 
           border: '1px solid #334155',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
           overflowX: 'auto'
         }}>
           {fetching ? (
-            <div style={{ padding: '30px', textAlign: 'center', color: '#38bdf8' }}>
-              ڈیٹا لوڈ ہو رہا ہے...
+            <div style={{ padding: '20px', textAlign: 'center', color: '#38bdf8', fontSize: '12px' }}>
+              Supabase سے ڈیٹا لوڈ ہو رہا ہے...
             </div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '13px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#0f172a', borderBottom: '1px solid #334155', color: '#94a3b8' }}>
-                  <th style={{ padding: '12px' }}>#</th>
-                  <th style={{ padding: '12px' }}>صارف کا نام</th>
-                  <th style={{ padding: '12px' }}>PPPoE یوزر نیم</th>
-                  <th style={{ padding: '12px' }}>فون نمبر</th>
-                  <th style={{ padding: '12px' }}>ماہانہ پیکج بل</th>
-                  <th style={{ padding: '12px' }}>جمع شدہ رقم</th>
-                  <th style={{ padding: '12px' }}>بقیہ بقایا (Remaining)</th>
-                  <th style={{ padding: '12px', textAlign: 'center' }}>سٹیٹس</th>
+                  <th style={{ padding: '8px' }}>#</th>
+                  <th style={{ padding: '8px' }}>نام</th>
+                  <th style={{ padding: '8px' }}>PPPoE یوزر نیم</th>
+                  <th style={{ padding: '8px' }}>فون</th>
+                  <th style={{ padding: '8px' }}>ماہانہ بل</th>
+                  <th style={{ padding: '8px' }}>جمع شدہ</th>
+                  <th style={{ padding: '8px' }}>بقیہ (Remaining)</th>
+                  <th style={{ padding: '8px', textAlign: 'center' }}>سٹیٹس</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCustomers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
-                      کوئی ریکارڈ موجود نہیں ہے۔
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '16px', color: '#64748b' }}>
+                      کوئی ریکارڈ نہیں ملا۔
                     </td>
                   </tr>
                 ) : (
                   filteredCustomers.map((user, index) => (
                     <tr key={user.id} style={{ borderBottom: '1px solid #1e293b' }}>
-                      <td style={{ padding: '12px', color: '#64748b' }}>{index + 1}</td>
-                      <td style={{ padding: '12px', fontWeight: 'bold', color: '#ffffff' }}>
+                      <td style={{ padding: '8px', color: '#64748b' }}>{index + 1}</td>
+                      <td style={{ padding: '8px', fontWeight: 'bold', color: '#ffffff' }}>
                         {user.full_name}
                       </td>
-                      <td style={{ padding: '12px', color: '#38bdf8', direction: 'ltr', textAlign: 'right', fontWeight: 'bold' }}>
+                      <td style={{ padding: '8px', color: '#38bdf8', direction: 'ltr', textAlign: 'right', fontWeight: 'bold' }}>
                         {user.pppoe_username}
                       </td>
-                      <td style={{ padding: '12px', color: '#cbd5e1' }}>
+                      <td style={{ padding: '8px', color: '#cbd5e1' }}>
                         {user.phone}
                       </td>
-                      <td style={{ padding: '12px', color: '#38bdf8', fontWeight: 'bold' }}>
+                      <td style={{ padding: '8px', color: '#38bdf8', fontWeight: 'bold' }}>
                         Rs {user.monthly_price}
                       </td>
-                      <td style={{ padding: '12px', color: '#34d399', fontWeight: 'bold' }}>
+                      <td style={{ padding: '8px', color: '#34d399', fontWeight: 'bold' }}>
                         Rs {user.last_paid_amount}
                       </td>
-                      <td style={{ padding: '12px', color: user.remaining_balance > 0 ? '#f87171' : '#34d399', fontWeight: 'bold', fontSize: '14px' }}>
+                      <td style={{ padding: '8px', color: user.remaining_balance > 0 ? '#f87171' : '#34d399', fontWeight: 'bold' }}>
                         Rs {user.remaining_balance}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'center' }}>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>
                         {user.is_paid ? (
-                          <span style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <CheckCircle2 size={12} /> وصول شدہ
+                          <span style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            <CheckCircle2 size={10} /> وصول شدہ
                           </span>
                         ) : (
-                          <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Clock size={12} /> پینڈنگ
+                          <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            <Clock size={10} /> پینڈنگ
                           </span>
                         )}
                       </td>

@@ -1,10 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../../components/Layout';
-import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
 import { 
   UserPlus, 
-  ArrowRight, 
   Save, 
   RotateCcw, 
   User, 
@@ -23,7 +21,7 @@ import {
 
 export default function NewConnection() {
   const [formData, setFormData] = useState({
-    serialNumber: `KFN-${Math.floor(1000 + Math.random() * 9000)}`,
+    serialNumber: 'KFN-0001',
     fullName: '',
     fatherName: '',
     phone: '',
@@ -40,6 +38,25 @@ export default function NewConnection() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // خودکار سیریل نمبر جنریٹ کرنے کے لیے (KFN-0001, KFN-0002 ...)
+  useEffect(() => {
+    const generateSerialNumber = async () => {
+      try {
+        const { count } = await supabase
+          .from('customers')
+          .select('*', { count: 'exact', head: true });
+
+        const nextNum = (count || 0) + 1;
+        const formattedSerial = `KFN-${String(nextNum).padStart(4, '0')}`;
+        setFormData(prev => ({ ...prev, serialNumber: formattedSerial }));
+      } catch (err) {
+        console.error('Serial Error:', err);
+      }
+    };
+
+    generateSerialNumber();
+  }, [isSubmitted]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -52,7 +69,7 @@ export default function NewConnection() {
     setIsSubmitted(false);
 
     try {
-      // Supabase میں کسٹمر ریکارڑ محفوظ کرنا
+      // 1. Supabase میں ڈیٹا سیو کریں
       const { data, error } = await supabase
         .from('customers')
         .insert([
@@ -69,15 +86,32 @@ export default function NewConnection() {
             pppoe_password: formData.pppoePassword,
             monthly_price: formData.monthlyPrice ? parseFloat(formData.monthlyPrice) : 0
           }
-        ]);
+        ])
+        .select();
 
       if (error) {
         setErrorMessage(`Supabase Error: ${error.message}`);
       } else {
         setIsSubmitted(true);
-        // فارم ری سیٹ کریں اور نیا سیریل نمبر جنریٹ کریں
+
+        // 2. واٹس ایپ پر خودکار خوش آمدید (Welcome) کا میسج بھیجیں
+        const targetPhone = formData.whatsapp || formData.phone;
+        if (targetPhone) {
+          const welcomeMessage = `محترم/محترمہ *${formData.fullName || 'صارف'}*!\nخان فائبر انٹرنیٹ نیٹ ورک میں خوش آمدید۔ 🎉\n\nآپ کا اکاؤنٹ کامیابی سے ایکٹیویٹ ہو چکا ہے۔\n\n🆔 *سیریل نمبر:* ${formData.serialNumber}\n🔑 *یوزر نیم:* ${formData.pppoeUsername}\n🔒 *پاسورڈ:* ${formData.pppoePassword}\n💰 *ماہانہ چارجز:* Rs ${formData.monthlyPrice || '0'}\n\nکسی بھی مسئلے یا معلومات کی صورت میں رابطہ کریں۔ شکریہ!`;
+
+          fetch('/api/send-whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone: targetPhone,
+              message: welcomeMessage
+            })
+          }).catch(err => console.error('WhatsApp Error:', err));
+        }
+
+        // فارم خالی کریں
         setFormData({
-          serialNumber: `KFN-${Math.floor(1000 + Math.random() * 9000)}`,
+          serialNumber: 'KFN-0001',
           fullName: '',
           fatherName: '',
           phone: '',
@@ -98,8 +132,8 @@ export default function NewConnection() {
   };
 
   const handleReset = () => {
-    setFormData({
-      serialNumber: `KFN-${Math.floor(1000 + Math.random() * 9000)}`,
+    setFormData(prev => ({
+      ...prev,
       fullName: '',
       fatherName: '',
       phone: '',
@@ -110,107 +144,89 @@ export default function NewConnection() {
       pppoeUsername: '',
       pppoePassword: '',
       monthlyPrice: ''
-    });
+    }));
     setErrorMessage('');
     setIsSubmitted(false);
   };
 
   return (
     <Layout showNavButtons={true}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
         
-        {/* ٹاپ بار: نیویگیشن اور ٹائٹل */}
+        {/* مختصر اور فکسڈ ہیڈر */}
         <div style={{ 
           display: 'flex', 
-          justifyContent: 'space-between', 
           alignItems: 'center', 
+          justifyContent: 'space-between',
           backgroundColor: '#1c2541', 
-          padding: '14px 20px', 
-          borderRadius: '16px', 
+          padding: '10px 14px', 
+          borderRadius: '12px', 
           border: '1px solid #3b82f6' 
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ backgroundColor: 'rgba(6, 182, 212, 0.2)', padding: '10px', borderRadius: '12px', color: '#22d3ee' }}>
-              <UserPlus size={24} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ backgroundColor: 'rgba(6, 182, 212, 0.2)', padding: '6px', borderRadius: '8px', color: '#22d3ee' }}>
+              <UserPlus size={18} />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#f472b6' }}>
+              <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#f472b6' }}>
                 نیا انٹرنیٹ کنکشن فارم (New Connection)
               </h2>
-              <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#93c5fd' }}>
-                نیا صارف درج کریں اور مائیکروٹک و Supabase میں اکاؤنٹ محفوظ کریں
+              <p style={{ margin: 0, fontSize: '9px', color: '#93c5fd' }}>
+                صارف کا نیا اندراج اور خودمختار واٹس ایپ الرٹ
               </p>
             </div>
           </div>
-
-          <Link href="/admin/dashboard" style={{ 
-            backgroundColor: '#0f172a', 
-            color: '#38bdf8', 
-            padding: '8px 16px', 
-            borderRadius: '10px', 
-            fontSize: '12px', 
-            textDecoration: 'none', 
-            fontWeight: 'bold', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px',
-            border: '1px solid #334155'
-          }}>
-            <ArrowRight size={16} />
-            ڈیش بورڈ پر واپس جائیں
-          </Link>
         </div>
 
-        {/* کامیابی کا پیغام */}
+        {/* کامیابی الرٹ */}
         {isSubmitted && (
           <div style={{ 
             backgroundColor: 'rgba(16, 185, 129, 0.2)', 
             border: '1px solid #10b981', 
             color: '#34d399', 
-            padding: '12px 20px', 
-            borderRadius: '12px', 
-            fontSize: '13px', 
+            padding: '10px 14px', 
+            borderRadius: '10px', 
+            fontSize: '12px', 
             display: 'flex', 
             alignItems: 'center', 
-            gap: '10px' 
+            gap: '8px' 
           }}>
-            <CheckCircle2 size={20} />
-            نیا کنکشن کامیابی کے ساتھ Supabase میں محفوظ ہو گیا ہے!
+            <CheckCircle2 size={16} />
+            نیا کنکشن محفوظ ہو گیا اور واٹس ایپ ویلکم میسج بھیج دیا گیا ہے!
           </div>
         )}
 
-        {/* خرابی کا پیغام */}
+        {/* ایرر الرٹ */}
         {errorMessage && (
           <div style={{ 
             backgroundColor: 'rgba(239, 68, 68, 0.2)', 
             border: '1px solid #ef4444', 
             color: '#f87171', 
-            padding: '12px 20px', 
-            borderRadius: '12px', 
-            fontSize: '13px', 
+            padding: '10px 14px', 
+            borderRadius: '10px', 
+            fontSize: '12px', 
             display: 'flex', 
             alignItems: 'center', 
-            gap: '10px' 
+            gap: '8px' 
           }}>
-            <AlertCircle size={20} />
+            <AlertCircle size={16} />
             {errorMessage}
           </div>
         )}
 
-        {/* اصلی رجسٹریشن فارم (تمام فیلڈز اپشنل) */}
+        {/* فارم */}
         <form onSubmit={handleSubmit} style={{ 
           backgroundColor: '#1c2541', 
-          borderRadius: '20px', 
-          padding: '24px', 
-          border: '1px solid #334155',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.3)'
+          borderRadius: '14px', 
+          padding: '16px', 
+          border: '1px solid #334155'
         }}>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
             
-            {/* 1. سیریل نمبر (Serial Number) */}
+            {/* 1. سیریل نمبر */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#f472b6', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#f472b6', marginBottom: '4px' }}>
                 سیریل نمبر (Serial Number)
               </label>
               <div style={{ position: 'relative' }}>
@@ -219,25 +235,25 @@ export default function NewConnection() {
                   name="serialNumber" 
                   value={formData.serialNumber} 
                   onChange={handleChange}
-                  placeholder="KFN-1001"
+                  readOnly
                   style={{ 
                     width: '100%', 
                     backgroundColor: '#0f172a', 
                     border: '1px solid #3b82f6', 
                     color: '#38bdf8', 
-                    padding: '10px 12px', 
-                    borderRadius: '10px', 
-                    fontSize: '13px',
+                    padding: '8px 10px', 
+                    borderRadius: '8px', 
+                    fontSize: '12px',
                     fontWeight: 'bold'
                   }} 
                 />
-                <Hash size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#64748b' }} />
+                <Hash size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
-            {/* 2. نام (Full Name) */}
+            {/* 2. نام */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
                 صارف کا نام (Full Name)
               </label>
               <div style={{ position: 'relative' }}>
@@ -252,25 +268,25 @@ export default function NewConnection() {
                     backgroundColor: '#0f172a', 
                     border: '1px solid #334155', 
                     color: '#ffffff', 
-                    padding: '10px 12px', 
-                    borderRadius: '10px', 
-                    fontSize: '13px' 
+                    padding: '8px 10px', 
+                    borderRadius: '8px', 
+                    fontSize: '12px' 
                   }} 
                 />
-                <User size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#64748b' }} />
+                <User size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
-            {/* 3. ولدیت (Father Name) */}
+            {/* 3. ولدیت */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
                 ولدیت (Father Name)
               </label>
               <div style={{ position: 'relative' }}>
                 <input 
                   type="text" 
                   name="fatherName" 
-                  placeholder="والد کا نام درج کریں"
+                  placeholder="والد کا نام"
                   value={formData.fatherName} 
                   onChange={handleChange}
                   style={{ 
@@ -278,18 +294,18 @@ export default function NewConnection() {
                     backgroundColor: '#0f172a', 
                     border: '1px solid #334155', 
                     color: '#ffffff', 
-                    padding: '10px 12px', 
-                    borderRadius: '10px', 
-                    fontSize: '13px' 
+                    padding: '8px 10px', 
+                    borderRadius: '8px', 
+                    fontSize: '12px' 
                   }} 
                 />
-                <User size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#64748b' }} />
+                <User size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
-            {/* 4. فون نمبر (Phone Number) */}
+            {/* 4. فون نمبر */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
                 فون نمبر (Mobile Number)
               </label>
               <div style={{ position: 'relative' }}>
@@ -304,19 +320,19 @@ export default function NewConnection() {
                     backgroundColor: '#0f172a', 
                     border: '1px solid #334155', 
                     color: '#ffffff', 
-                    padding: '10px 12px', 
-                    borderRadius: '10px', 
-                    fontSize: '13px' 
+                    padding: '8px 10px', 
+                    borderRadius: '8px', 
+                    fontSize: '12px' 
                   }} 
                 />
-                <Phone size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#64748b' }} />
+                <Phone size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
-            {/* 5. واٹس ایپ نمبر (WhatsApp Number) */}
+            {/* 5. واٹس ایپ نمبر */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '6px' }}>
-                واٹس ایپ نمبر (WhatsApp Number)
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
+                واٹس ایپ نمبر (WhatsApp)
               </label>
               <div style={{ position: 'relative' }}>
                 <input 
@@ -330,18 +346,18 @@ export default function NewConnection() {
                     backgroundColor: '#0f172a', 
                     border: '1px solid #334155', 
                     color: '#ffffff', 
-                    padding: '10px 12px', 
-                    borderRadius: '10px', 
-                    fontSize: '13px' 
+                    padding: '8px 10px', 
+                    borderRadius: '8px', 
+                    fontSize: '12px' 
                   }} 
                 />
-                <MessageSquare size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#64748b' }} />
+                <MessageSquare size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
-            {/* 6. ای میل (Email Address) */}
+            {/* 6. ای میل */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
                 ای میل ایڈریس (Email)
               </label>
               <div style={{ position: 'relative' }}>
@@ -356,19 +372,19 @@ export default function NewConnection() {
                     backgroundColor: '#0f172a', 
                     border: '1px solid #334155', 
                     color: '#ffffff', 
-                    padding: '10px 12px', 
-                    borderRadius: '10px', 
-                    fontSize: '13px' 
+                    padding: '8px 10px', 
+                    borderRadius: '8px', 
+                    fontSize: '12px' 
                   }} 
                 />
-                <Mail size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#64748b' }} />
+                <Mail size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
-            {/* 7. شناختی کارڈ نمبر (CNIC Number) */}
+            {/* 7. شناختی کارڈ */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '6px' }}>
-                شناختی کارڈ نمبر (CNIC Number)
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
+                شناختی کارڈ (CNIC)
               </label>
               <div style={{ position: 'relative' }}>
                 <input 
@@ -382,50 +398,48 @@ export default function NewConnection() {
                     backgroundColor: '#0f172a', 
                     border: '1px solid #334155', 
                     color: '#ffffff', 
-                    padding: '10px 12px', 
-                    borderRadius: '10px', 
-                    fontSize: '13px' 
+                    padding: '8px 10px', 
+                    borderRadius: '8px', 
+                    fontSize: '12px' 
                   }} 
                 />
-                <CreditCard size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#64748b' }} />
+                <CreditCard size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
-            {/* 8. ماہانہ چارجز (Monthly Price) */}
+            {/* 8. ماہانہ چارجز */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '6px' }}>
-                ماہانہ چارجز (Monthly Price - Rs)
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
+                ماہانہ چارجز (Rs)
               </label>
-              <div style={{ position: 'relative' }}>
-                <input 
-                  type="number" 
-                  name="monthlyPrice" 
-                  placeholder="1500"
-                  value={formData.monthlyPrice} 
-                  onChange={handleChange}
-                  style={{ 
-                    width: '100%', 
-                    backgroundColor: '#0f172a', 
-                    border: '1px solid #334155', 
-                    color: '#ffffff', 
-                    padding: '10px 12px', 
-                    borderRadius: '10px', 
-                    fontSize: '13px' 
-                  }} 
-                />
-              </div>
+              <input 
+                type="number" 
+                name="monthlyPrice" 
+                placeholder="1500"
+                value={formData.monthlyPrice} 
+                onChange={handleChange}
+                style={{ 
+                  width: '100%', 
+                  backgroundColor: '#0f172a', 
+                  border: '1px solid #334155', 
+                  color: '#ffffff', 
+                  padding: '8px 10px', 
+                  borderRadius: '8px', 
+                  fontSize: '12px' 
+                }} 
+              />
             </div>
 
-            {/* 9. ایڈریس (Home Address) */}
+            {/* 9. ایڈریس */}
             <div style={{ gridColumn: 'span 1 / -1' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
                 مکمل ایڈریس (Address)
               </label>
               <div style={{ position: 'relative' }}>
                 <textarea 
                   name="address" 
                   rows={2}
-                  placeholder="گھر / دکان کا مکمل پتہ درج کریں..."
+                  placeholder="پتہ درج کریں..."
                   value={formData.address} 
                   onChange={handleChange}
                   style={{ 
@@ -433,30 +447,30 @@ export default function NewConnection() {
                     backgroundColor: '#0f172a', 
                     border: '1px solid #334155', 
                     color: '#ffffff', 
-                    padding: '10px 12px', 
-                    borderRadius: '10px', 
-                    fontSize: '13px',
+                    padding: '8px 10px', 
+                    borderRadius: '8px', 
+                    fontSize: '12px',
                     fontFamily: 'inherit'
                   }} 
                 />
-                <MapPin size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#64748b' }} />
+                <MapPin size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
           </div>
 
-          {/* سیکشن 2: PPPoE کریڈینشلز (MikroTik / Network Setup) */}
-          <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px dashed #334155' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: '#38bdf8', marginBottom: '14px' }}>
-              🔒 مائیکروٹک PPPoE اکاؤنٹ سیٹنگز
+          {/* PPPoE کریڈینشلز */}
+          <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px dashed #334155' }}>
+            <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: '#38bdf8', marginBottom: '10px' }}>
+              🔒 PPPoE اکاؤنٹ کریڈینشلز
             </h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
               
-              {/* 10. پی پی پی او ای یوزر نیم (PPPoE Username) */}
+              {/* PPPoE یوزر نیم */}
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '6px' }}>
-                  PPPoE یوزر نیم (PPPoE Username)
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
+                  PPPoE یوزر نیم
                 </label>
                 <div style={{ position: 'relative' }}>
                   <input 
@@ -470,21 +484,21 @@ export default function NewConnection() {
                       backgroundColor: '#0f172a', 
                       border: '1px solid #06b6d4', 
                       color: '#38bdf8', 
-                      padding: '10px 12px', 
-                      borderRadius: '10px', 
-                      fontSize: '13px',
+                      padding: '8px 10px', 
+                      borderRadius: '8px', 
+                      fontSize: '12px',
                       fontWeight: 'bold',
                       direction: 'ltr'
                     }} 
                   />
-                  <KeyRound size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#06b6d4' }} />
+                  <KeyRound size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#06b6d4' }} />
                 </div>
               </div>
 
-              {/* 11. پاسورڈ (PPPoE Password) */}
+              {/* PPPoE پاسورڈ */}
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '6px' }}>
-                  پاسورڈ (PPPoE Password)
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
+                  PPPoE پاسورڈ
                 </label>
                 <div style={{ position: 'relative' }}>
                   <input 
@@ -498,22 +512,22 @@ export default function NewConnection() {
                       backgroundColor: '#0f172a', 
                       border: '1px solid #06b6d4', 
                       color: '#38bdf8', 
-                      padding: '10px 12px', 
-                      borderRadius: '10px', 
-                      fontSize: '13px',
+                      padding: '8px 10px', 
+                      borderRadius: '8px', 
+                      fontSize: '12px',
                       fontWeight: 'bold',
                       direction: 'ltr'
                     }} 
                   />
-                  <Lock size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#06b6d4' }} />
+                  <Lock size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#06b6d4' }} />
                 </div>
               </div>
 
             </div>
           </div>
 
-          {/* ایکشن بٹنز (Action Buttons) */}
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '28px' }}>
+          {/* ایکشن بٹنز */}
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
             <button 
               type="button" 
               onClick={handleReset}
@@ -521,19 +535,19 @@ export default function NewConnection() {
               style={{ 
                 backgroundColor: '#334155', 
                 color: '#cbd5e1', 
-                padding: '10px 20px', 
-                borderRadius: '10px', 
-                fontSize: '13px', 
+                padding: '8px 16px', 
+                borderRadius: '8px', 
+                fontSize: '12px', 
                 fontWeight: 'bold', 
                 border: 'none', 
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
+                gap: '6px'
               }}
             >
-              <RotateCcw size={16} />
-              ری سیٹ کریں
+              <RotateCcw size={14} />
+              ری سیٹ
             </button>
 
             <button 
@@ -542,27 +556,26 @@ export default function NewConnection() {
               style={{ 
                 backgroundColor: '#3b82f6', 
                 color: '#ffffff', 
-                padding: '10px 24px', 
-                borderRadius: '10px', 
-                fontSize: '13px', 
+                padding: '8px 20px', 
+                borderRadius: '8px', 
+                fontSize: '12px', 
                 fontWeight: 'bold', 
                 border: 'none', 
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)'
+                gap: '6px'
               }}
             >
               {loading ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" />
+                  <Loader2 size={14} className="animate-spin" />
                   محفوظ ہو رہا ہے...
                 </>
               ) : (
                 <>
-                  <Save size={16} />
-                  نیا کنکشن محفوظ کریں
+                  <Save size={14} />
+                  محفوظ کریں
                 </>
               )}
             </button>
