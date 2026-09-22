@@ -20,8 +20,16 @@ import {
   Loader2,
   Wifi,
   Gauge,
-  DollarSign
+  DollarSign,
+  Package as PackageIcon
 } from 'lucide-react';
+
+interface PackageType {
+  id: number;
+  package_name: string;
+  speed: string;
+  price: number;
+}
 
 export default function NewConnection() {
   const [formData, setFormData] = useState({
@@ -41,14 +49,16 @@ export default function NewConnection() {
     speed: ''
   });
 
+  const [packagesList, setPackagesList] = useState<PackageType[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // خودکار سیریل نمبر جنریٹ کرنے کے لیے
+  // 1. خودکار سیریل نمبر اور Supabase سے پیکجز کی لسٹ فیچ کرنا
   useEffect(() => {
-    const generateSerialNumber = async () => {
+    const initData = async () => {
       try {
+        // سیریل نمبر جنریٹ کریں
         const { count } = await supabase
           .from('customers')
           .select('*', { count: 'exact', head: true });
@@ -56,13 +66,45 @@ export default function NewConnection() {
         const nextNum = (count || 0) + 1;
         const formattedSerial = `KFN-${String(nextNum).padStart(4, '0')}`;
         setFormData(prev => ({ ...prev, serialNumber: formattedSerial }));
+
+        // ایڈمن کے تمام پیکجز فیچ کریں
+        const { data: pkgData } = await supabase
+          .from('packages')
+          .select('*')
+          .order('price', { ascending: true });
+
+        if (pkgData) {
+          setPackagesList(pkgData);
+        }
       } catch (err) {
-        console.error('Serial Error:', err);
+        console.error('Initialization Error:', err);
       }
     };
 
-    generateSerialNumber();
+    initData();
   }, [isSubmitted]);
+
+  // 2. پیکج سلیکٹ کرنے پر سپیڈ اور ماہانہ بل آٹو سیٹ کریں
+  const handlePackageSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedPkgName = e.target.value;
+    const pkgObj = packagesList.find(p => p.package_name === selectedPkgName);
+
+    if (pkgObj) {
+      setFormData(prev => ({
+        ...prev,
+        packageName: pkgObj.package_name,
+        speed: pkgObj.speed,
+        monthlyPrice: String(pkgObj.price)
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        packageName: selectedPkgName,
+        speed: '',
+        monthlyPrice: ''
+      }));
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -76,7 +118,7 @@ export default function NewConnection() {
     setIsSubmitted(false);
 
     try {
-      // 1. Supabase میں ڈیٹا سیو کریں
+      // 1. Supabase میں کسٹمر سیو کریں (ڈیفالٹ پورٹل پاسورڈ 12345 خودکار سیٹ ہو گا)
       const { error } = await supabase
         .from('customers')
         .insert([
@@ -94,7 +136,8 @@ export default function NewConnection() {
             monthly_price: formData.monthlyPrice ? parseFloat(formData.monthlyPrice) : 0,
             connection_charges: formData.connectionCharges ? parseFloat(formData.connectionCharges) : 0,
             package_name: formData.packageName,
-            speed: formData.speed
+            speed: formData.speed,
+            password: '12345' // کسٹمر پورٹل لاگ ان پاسورڈ
           }
         ]);
 
@@ -103,7 +146,7 @@ export default function NewConnection() {
       } else {
         setIsSubmitted(true);
 
-        // 2. واٹس ایپ پر ڈائریکٹ خوش آمدید (Welcome) کا میسج بھیجیں
+        // 2. واٹس ایپ پر ڈائریکٹ پورٹل لنک اور لاگ ان تفصیلات کے ساتھ میسج بھیجیں
         const targetPhone = formData.whatsapp || formData.phone;
         if (targetPhone) {
           const welcomeMessage = 
@@ -116,16 +159,23 @@ export default function NewConnection() {
             `⚡ *سپیڈ:* ${formData.speed || 'N/A'}\n` +
             `💳 *کنکشن چارجز:* Rs ${formData.connectionCharges || '0'}\n` +
             `💰 *ماہانہ چارجز:* Rs ${formData.monthlyPrice || '0'}\n\n` +
-            `🔑 *لاگ ان تفصیلات:*\n` +
+            `🔑 *روٹر / PPPoE کنکشن لاگ ان:*\n` +
             `👤 *یوزر نیم:* ${formData.pppoeUsername}\n` +
             `🔒 *پاسورڈ:* ${formData.pppoePassword}\n\n` +
+            `🌐 *کسٹمر پورٹل و موبائل ایپ:* \n` +
+            `اپنے موبائل میں خان فائبر کی ایپ انسٹال کرنے یا آن لائن بل جمع کروانے کے لیے نیچے دیے گئے لنک پر کلک کریں:\n` +
+            `👉 https://khanfiber.vercel.app\n\n` +
+            `📱 *پورٹل لاگ ان تفصیلات:*\n` +
+            `👤 *یوزر نیم / کسٹمر ID:* ${formData.serialNumber}\n` +
+            `🔒 *پاسورڈ:* 12345\n` +
+            `*(آپ پورٹل میں لاگ ان کر کے اپنا پاسورڈ بھی تبدیل کر سکتے ہیں)*\n\n` +
             `کسی بھی مسئلہ یا معلومات کی صورت میں رابطہ کریں۔\n` +
             `شکریہ! *خان فائبر نیٹ ورک ٹیم*`;
 
           openWhatsAppDirect(targetPhone, welcomeMessage);
         }
 
-        // فارم خالی کریں
+        // فارم ری سیٹ کریں
         setFormData({
           serialNumber: 'KFN-0001',
           fullName: '',
@@ -312,25 +362,28 @@ export default function NewConnection() {
               </div>
             </div>
 
-            {/* 6. پیکیج نیم (نئی فیلڈ) */}
+            {/* 6. پیکیج سلیکٹ کریں (Auto-Fill Dropdown) */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#38bdf8', marginBottom: '4px' }}>
-                پیکیج نیم (Package Name)
+                پیکیج منتخب کریں (Package)
               </label>
               <div style={{ position: 'relative' }}>
-                <input 
-                  type="text" 
-                  name="packageName" 
-                  placeholder="مثلاً: Home Basic / Super Fiber"
-                  value={formData.packageName} 
-                  onChange={handleChange}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #38bdf8', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }} 
-                />
-                <Wifi size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#38bdf8' }} />
+                <select
+                  value={formData.packageName}
+                  onChange={handlePackageSelect}
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #38bdf8', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }}
+                >
+                  <option value="">پیکیج منتخب کریں...</option>
+                  {packagesList.map(pkg => (
+                    <option key={pkg.id} value={pkg.package_name}>
+                      {pkg.package_name} ({pkg.speed}) - Rs {pkg.price}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            {/* 7. سپیڈ (نئی فیلڈ) */}
+            {/* 7. سپیڈ (خودکار) */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#38bdf8', marginBottom: '4px' }}>
                 انٹرنیٹ سپیڈ (Speed)
@@ -339,7 +392,7 @@ export default function NewConnection() {
                 <input 
                   type="text" 
                   name="speed" 
-                  placeholder="مثلاً: 10 Mbps / 20 Mbps"
+                  placeholder="مثلاً: 10 Mbps"
                   value={formData.speed} 
                   onChange={handleChange}
                   style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #38bdf8', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }} 
@@ -348,7 +401,7 @@ export default function NewConnection() {
               </div>
             </div>
 
-            {/* 8. کنکشن چارجز (نئی فیلڈ) */}
+            {/* 8. کنکشن چارجز */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#f472b6', marginBottom: '4px' }}>
                 کنکشن چارجز (Connection Charges Rs)
@@ -366,7 +419,7 @@ export default function NewConnection() {
               </div>
             </div>
 
-            {/* 9. ماہانہ چارجز */}
+            {/* 9. ماہانہ چارجز (خودکار) */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#34d399', marginBottom: '4px' }}>
                 ماہانہ چارجز (Monthly Charges Rs) *
