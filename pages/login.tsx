@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
 import { User, Lock, LogIn, ShieldCheck, Globe } from 'lucide-react';
@@ -17,7 +16,14 @@ export default function LoginPage() {
     setErrorMsg('');
 
     try {
-      // ایڈمن یا کسٹمر لاگ ان چیک
+      // 1. ایڈمن ہارڈ کوڈڈ لاگ ان چیک (admin / admin123)
+      if (username === 'admin' && password === (localStorage.getItem('admin_password') || 'admin123')) {
+        localStorage.setItem('user', JSON.stringify({ full_name: 'ایڈمن', role: 'admin', username: 'admin' }));
+        router.push('/admin/dashboard');
+        return;
+      }
+
+      // 2. کسٹمر لاگ ان چیک
       const { data, error } = await supabase
         .from('customers')
         .select('*')
@@ -63,7 +69,7 @@ export default function LoginPage() {
         position: 'relative'
       }}>
 
-        {/* 1. پبلک فولڈر سے لوگو (public/logo.png) */}
+        {/* لوگو */}
         <div style={{
           width: '85px',
           height: '85px',
@@ -82,13 +88,12 @@ export default function LoginPage() {
             alt="Logo" 
             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             onError={(e) => {
-              // اگر لوگو کی امیج لوڈ نہ ہو تو فال بیک دکھائے
               (e.target as HTMLElement).style.display = 'none';
             }}
           />
         </div>
 
-        {/* 2. ٹائٹل اور ذیلی متن */}
+        {/* ٹائٹل */}
         <div style={{ textAlign: 'center' }}>
           <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#ffffff' }}>
             خان فائبر انٹرنیٹ نیٹ ورک
@@ -105,10 +110,9 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* 3. لاگ ان فارم */}
+        {/* لاگ ان فارم */}
         <form onSubmit={handleLogin} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           
-          {/* یوزر نیم */}
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#93c5fd', marginBottom: '4px' }}>
               یوزر نیم (Username / Account)
@@ -135,7 +139,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* پاسورڈ */}
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#93c5fd', marginBottom: '4px' }}>
               پاسورڈ (Password)
@@ -162,7 +165,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* لاگ ان بٹن */}
           <button 
             type="submit" 
             disabled={loading}
@@ -189,14 +191,14 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* 4. اپ ڈیٹ شدہ فوٹر متن (Powered by Saqqa Software Service) */}
+        {/* فوٹر */}
         <div style={{ textAlign: 'center', marginTop: '10px', borderTop: '1px solid #1e293b', paddingTop: '10px', width: '100%' }}>
           <p style={{ margin: 0, fontSize: '10px', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
             <ShieldCheck size={12} style={{ color: '#10b981' }} />
             محفوظ و خودکار ISP منیجمنٹ سسٹم
           </p>
           <p style={{ margin: '3px 0 0 0', fontSize: '10px', color: '#94a3b8', fontWeight: '500', direction: 'ltr' }}>
-            Powered by Wateen Telecom Service
+            Powered by Saqaa Software Services
           </p>
         </div>
 
