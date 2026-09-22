@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../../components/Layout';
 import { supabase } from '../../lib/supabaseClient';
+import { openWhatsAppDirect } from '../../lib/whatsapp';
 import { 
   FileText, 
   Search, 
@@ -9,7 +10,8 @@ import {
   Clock, 
   Users,
   TrendingUp,
-  CreditCard
+  CreditCard,
+  MessageSquare
 } from 'lucide-react';
 
 interface CustomerStatusType {
@@ -18,6 +20,7 @@ interface CustomerStatusType {
   father_name: string;
   pppoe_username: string;
   phone: string;
+  whatsapp: string;
   monthly_price: number;
   last_paid_amount: number;
   remaining_balance: number;
@@ -58,8 +61,13 @@ export default function CollectionListPage() {
           const customerCols = colData?.filter((col) => col.customer_id === c.id) || [];
           const customerLatestCol = customerCols[0];
 
-          // مجموعی ادا شدہ اور بقیہ رقم
-          const remaining = customerLatestCol ? Number(customerLatestCol.remaining_balance || 0) : Number(c.monthly_price || 0);
+          // اگر پہلی بار ہے اور کوئی کلیکشن نہیں ہے تو کنکشن چارجز + ماہانہ بل ملائیں
+          const initialCharges = Number(c.connection_charges || 0) + Number(c.monthly_price || 0);
+
+          const remaining = customerLatestCol 
+            ? Number(customerLatestCol.remaining_balance || 0) 
+            : initialCharges;
+            
           const lastPaid = customerLatestCol ? Number(customerLatestCol.paid_amount || 0) : 0;
           
           const isPaid = remaining <= 0;
@@ -76,6 +84,7 @@ export default function CollectionListPage() {
             father_name: c.father_name || '---',
             pppoe_username: c.pppoe_username || '---',
             phone: c.phone || '---',
+            whatsapp: c.whatsapp || c.phone || '---',
             monthly_price: Number(c.monthly_price || 0),
             last_paid_amount: lastPaid,
             remaining_balance: remaining,
@@ -117,6 +126,26 @@ export default function CollectionListPage() {
     return matchesTab && matchesSearch;
   });
 
+  // پینڈنگ بل کا واٹس ایپ تذکیر میسج بھیجنے کا طریقہ
+  const handleSendReminder = (customer: CustomerStatusType) => {
+    const targetPhone = customer.whatsapp || customer.phone;
+    if (!targetPhone || targetPhone === '---') {
+      alert('اس صارف کا واٹس ایپ یا فون نمبر موجود نہیں ہے!');
+      return;
+    }
+
+    const reminderMessage = 
+      `*خان فائبر انٹرنیٹ نیٹ ورک - بل تذکیر (Reminder Notice)*\n\n` +
+      `محترم *${customer.full_name}*!\n` +
+      `آپ کا ماہانہ انٹرنیٹ بل *Rs ${customer.remaining_balance}* واجب الادا (پینڈنگ) ہے۔\n\n` +
+      `⚠️ *برائے مہربانی اپنا بل جلد از جلد جمع کروائیں۔* وقت پر بل جمع نہ کروانے کی صورت میں آپ کا انٹرنیٹ کنکشن عارضی طور پر بند کر دیا جائے گا۔\n\n` +
+      `اگر آپ بل جمع کروا چکے ہیں تو برائے مہربانی رسید شیئر کریں۔\n\n` +
+      `شکریہ!\n` +
+      `*خان فائبر نیٹ ورک ٹیم*`;
+
+    openWhatsAppDirect(targetPhone, reminderMessage);
+  };
+
   return (
     <Layout showNavButtons={true}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
@@ -140,16 +169,16 @@ export default function CollectionListPage() {
                 لسٹ پیمنٹ وصولی (Collection Status)
               </h2>
               <p style={{ margin: 0, fontSize: '9px', color: '#93c5fd' }}>
-                Supabase لائیو وصولی اور پینڈنگ ریکارڑ لسٹ
+                Supabase لائیو وصولی، پینڈنگ ریکارڑ اور واٹس ایپ نوٹس
               </p>
             </div>
           </div>
         </div>
 
-        {/* 2. اینالیٹکس کاؤنٹرز (2-Grid Mobile Responsive) */}
+        {/* 2. اینالیٹکس کاؤنٹرز (2-Grid Responsive) */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
           gap: '10px',
           width: '100%'
         }}>
@@ -157,29 +186,29 @@ export default function CollectionListPage() {
           <div style={{ backgroundColor: '#1c2541', border: '1px solid #3b82f6', borderRadius: '10px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <p style={{ margin: 0, fontSize: '10px', color: '#93c5fd' }}>کل صارفین</p>
-              <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold', color: '#ffffff' }}>{totalUsers}</h3>
+              <h3 style={{ margin: '2px 0 0 0', fontSize: '15px', fontWeight: 'bold', color: '#ffffff' }}>{totalUsers} یوزرز</h3>
             </div>
             <div style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', padding: '6px', borderRadius: '6px', color: '#60a5fa' }}>
               <Users size={16} />
             </div>
           </div>
 
-          {/* وصول شدہ */}
+          {/* وصول شدہ یوزرز اور کل وصول رقم */}
           <div style={{ backgroundColor: '#1c2541', border: '1px solid #10b981', borderRadius: '10px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <p style={{ margin: 0, fontSize: '10px', color: '#93c5fd' }}>وصول شدہ (Rs {totals.collectedAmount})</p>
-              <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold', color: '#34d399' }}>{paidCount} یوزرز</h3>
+              <p style={{ margin: 0, fontSize: '10px', color: '#34d399', fontWeight: 'bold' }}>کل وصول شدہ ({paidCount} یوزرز)</p>
+              <h3 style={{ margin: '2px 0 0 0', fontSize: '15px', fontWeight: 'bold', color: '#ffffff' }}>Rs {totals.collectedAmount}</h3>
             </div>
             <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', padding: '6px', borderRadius: '6px', color: '#34d399' }}>
               <TrendingUp size={16} />
             </div>
           </div>
 
-          {/* بقیہ پینڈنگ */}
+          {/* پینڈنگ یوزرز اور کل پینڈنگ رقم */}
           <div style={{ backgroundColor: '#1c2541', border: '1px solid #ef4444', borderRadius: '10px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gridColumn: 'span 1 / -1' }}>
             <div>
-              <p style={{ margin: 0, fontSize: '10px', color: '#93c5fd' }}>پینڈنگ واجبات (Rs {totals.pendingAmount})</p>
-              <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold', color: '#f87171' }}>{pendingCount} یوزرز پینڈنگ</h3>
+              <p style={{ margin: 0, fontSize: '10px', color: '#f87171', fontWeight: 'bold' }}>کل پینڈنگ ({pendingCount} یوزرز)</p>
+              <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold', color: '#ffffff' }}>Rs {totals.pendingAmount}</h3>
             </div>
             <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', padding: '6px', borderRadius: '6px', color: '#f87171' }}>
               <CreditCard size={16} />
@@ -317,7 +346,7 @@ export default function CollectionListPage() {
                   <th style={{ padding: '8px' }}>ماہانہ بل</th>
                   <th style={{ padding: '8px' }}>جمع شدہ</th>
                   <th style={{ padding: '8px' }}>بقیہ (Remaining)</th>
-                  <th style={{ padding: '8px', textAlign: 'center' }}>سٹیٹس</th>
+                  <th style={{ padding: '8px', textAlign: 'center' }}>سٹیٹس و ایکشن</th>
                 </tr>
               </thead>
               <tbody>
@@ -351,13 +380,37 @@ export default function CollectionListPage() {
                       </td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>
                         {user.is_paid ? (
-                          <span style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <CheckCircle2 size={10} /> وصول شدہ
+                          <span style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '4px 8px', borderRadius: '10px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                            <CheckCircle2 size={11} /> وصول شدہ
                           </span>
                         ) : (
-                          <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <Clock size={10} /> پینڈنگ
-                          </span>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)', padding: '4px 8px', borderRadius: '10px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                              <Clock size={11} /> پینڈنگ
+                            </span>
+
+                            {/* واٹس ایپ ریمائنڈر بٹن */}
+                            <button
+                              onClick={() => handleSendReminder(user)}
+                              title="واٹس ایپ پر بل نوٹس بھیجیں"
+                              style={{
+                                backgroundColor: '#10b981',
+                                color: '#ffffff',
+                                border: 'none',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                fontSize: '10px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px'
+                              }}
+                            >
+                              <MessageSquare size={11} />
+                              واٹس ایپ نوٹس
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
