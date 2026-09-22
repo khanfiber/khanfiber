@@ -16,25 +16,34 @@ export default function LoginPage() {
     setErrorMsg('');
 
     try {
-      // 1. ایڈمن ہارڈ کوڈڈ لاگ ان چیک (admin / admin123)
-      if (username === 'admin' && password === (localStorage.getItem('admin_password') || 'admin123')) {
+      const trimmedUser = username.trim();
+
+      // 1. ایڈمن لاگ ان (admin / admin123)
+      if (trimmedUser === 'admin' && password === (localStorage.getItem('admin_password') || 'admin123')) {
         localStorage.setItem('user', JSON.stringify({ full_name: 'ایڈمن', role: 'admin', username: 'admin' }));
         router.push('/admin/dashboard');
         return;
       }
 
-      // 2. کسٹمر لاگ ان چیک
+      // 2. کسٹمر لاگ ان (ای میل یا سیریل نمبر / کسٹمر نمبر سے)
       const { data, error } = await supabase
         .from('customers')
         .select('*')
-        .eq('pppoe_username', username)
+        .or(`email.eq.${trimmedUser},serial_number.eq.${trimmedUser},pppoe_username.eq.${trimmedUser}`)
         .single();
 
       if (error || !data) {
-        setErrorMsg('یوزر نیم یا پاسورڈ غلط ہے!');
+        setErrorMsg('یوزر نیم، ای میل یا کسٹمر نمبر غلط ہے!');
       } else {
-        localStorage.setItem('user', JSON.stringify(data));
-        router.push('/admin/dashboard');
+        // پاسورڈ چیک (پورٹل پاسورڈ یا ڈیفالٹ 12345)
+        const validPassword = data.password || '12345';
+        
+        if (password === validPassword) {
+          localStorage.setItem('user', JSON.stringify({ ...data, role: 'customer' }));
+          router.push('/user/dashboard');
+        } else {
+          setErrorMsg('پاسورڈ غلط ہے!');
+        }
       }
     } catch (err: any) {
       setErrorMsg('لاگ ان میں خرابی پیش آئی: ' + err.message);
@@ -87,9 +96,7 @@ export default function LoginPage() {
             src="/logo.png" 
             alt="Logo" 
             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            onError={(e) => {
-              (e.target as HTMLElement).style.display = 'none';
-            }}
+            onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
           />
         </div>
 
@@ -115,13 +122,13 @@ export default function LoginPage() {
           
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#93c5fd', marginBottom: '4px' }}>
-              یوزر نیم (Username / Account)
+              ای میل یا کسٹمر نمبر (مثلاً: KFN0001)
             </label>
             <div style={{ position: 'relative' }}>
               <input 
                 type="text" 
                 required
-                placeholder="اپنا یوزر نیم درج کریں" 
+                placeholder="ای میل یا KFN0001 درج کریں" 
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 style={{
@@ -141,7 +148,7 @@ export default function LoginPage() {
 
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#93c5fd', marginBottom: '4px' }}>
-              پاسورڈ (Password)
+              پاسورڈ (ڈیفالٹ: 12345)
             </label>
             <div style={{ position: 'relative' }}>
               <input 
