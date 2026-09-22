@@ -5,9 +5,13 @@ export default function Document() {
     <Html lang="ur" dir="rtl">
       <Head>
         <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#1c2541" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="KhanFiber" />
       </Head>
-      <body>
+      <body style={{ backgroundColor: '#0f172a', margin: 0, padding: 0 }}>
         <Main />
         <NextScript />
       </body>
