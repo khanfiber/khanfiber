@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import Layout from '../../components/Layout';
-import { supabase } from '../../lib/supabaseClient';
-import { openWhatsAppDirect } from '../../lib/whatsapp';
+import Layout from '../components/Layout';
+import { supabase } from '../lib/supabaseClient';
+import { openWhatsAppDirect } from '../lib/whatsapp';
 import { 
   UserPlus, 
   Save, 
@@ -64,7 +64,7 @@ export default function NewConnection() {
     generateSerialNumber();
   }, [isSubmitted]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -122,7 +122,6 @@ export default function NewConnection() {
             `کسی بھی مسئلہ یا معلومات کی صورت میں رابطہ کریں۔\n` +
             `شکریہ! *خان فائبر نیٹ ورک ٹیم*`;
 
-          // واٹس ایپ ونڈو اوپن کریں
           openWhatsAppDirect(targetPhone, welcomeMessage);
         }
 
@@ -195,7 +194,7 @@ export default function NewConnection() {
                 نیا انٹرنیٹ کنکشن فارم (New Connection)
               </h2>
               <p style={{ margin: 0, fontSize: '9px', color: '#93c5fd' }}>
-                صارف کا نیا اندراج اور ڈائریکٹ واٹس ایپ الٹی میٹ نوٹیفکیشن
+                صارف کا نیا اندراج اور ڈائریکٹ واٹس ایپ نوٹیفکیشن
               </p>
             </div>
           </div>
