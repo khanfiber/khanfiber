@@ -36,8 +36,9 @@ export default function BillCollection() {
   // Supabase سے کسٹمرز لوڈ کریں
   useEffect(() => {
     const loadCustomers = async () => {
-      const { data } = await supabase.from('customers').select('*');
+      const { data, error } = await supabase.from('customers').select('*');
       if (data) setCustomers(data);
+      if (error) console.error('Fetch customers error:', error);
     };
     loadCustomers();
   }, []);
@@ -50,22 +51,23 @@ export default function BillCollection() {
   const handleSelectCustomer = async (customer: CustomerType) => {
     setSelectedCustomer(customer);
     setSearchTerm(customer.full_name || customer.pppoe_username);
-    setCurrentBill(customer.monthly_price || 0);
+    setCurrentBill(Number(customer.monthly_price) || 0);
 
-    // 1. چیک کریں کہ کیا کسٹمر کی پہلے کوئی وصولی موجود ہے؟
-    const { data } = await supabase
+    // 1. پہلے Collections ٹیبل میں چیک کریں کہ کیا اس کسٹمر کا کوئی پرانا ریکارڑ ہے
+    const { data, error } = await supabase
       .from('collections')
       .select('remaining_balance')
       .eq('customer_id', customer.id)
       .order('id', { ascending: false })
       .limit(1);
 
-    if (data && data.length > 0) {
-      // اگر پرانی ہسٹری ہے تو بقیہ رقم لیں
-      setPreviousArrears(data[0].remaining_balance || 0);
+    if (!error && data && data.length > 0) {
+      // اگر پہلے بلز جمع ہو چکے ہیں تو آخری بقیہ رقم (Remaining Balance) اٹھائیں
+      setPreviousArrears(Number(data[0].remaining_balance) || 0);
     } else {
-      // اگر پہلا بل ہے تو کنکشن چارجز کو بطور پچھلا بقایا دکھائیں
-      setPreviousArrears(customer.connection_charges || 0);
+      // اگر پہلا بل ہے (کوئی کلیکشن نہیں ہے) تو کسٹمر کے Connection Charges ہی پچھلا بقایاجات بنیں گے
+      const connCharges = Number(customer.connection_charges) || 0;
+      setPreviousArrears(connCharges);
     }
   };
 
@@ -135,7 +137,7 @@ export default function BillCollection() {
     <Layout showNavButtons={true}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
         
-        {/* مختصر ٹاپ ہیڈر */}
+        {/* ٹاپ ہیڈر */}
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
