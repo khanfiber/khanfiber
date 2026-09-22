@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import Layout from '../components/Layout';
-import { supabase } from '../lib/supabaseClient';
-import { openWhatsAppDirect } from '../lib/whatsapp';
+import Layout from '../../components/Layout';
+import { supabase } from '../../lib/supabaseClient';
+import { openWhatsAppDirect } from '../../lib/whatsapp';
 import { 
   UserPlus, 
   Save, 
