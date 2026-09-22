@@ -1,23 +1,14 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
   typescript: {
-    // Vercel پر ڈیپلائے کرتے وقت تایپ سکرپٹ ایررز کو بلاک کرنے سے روکے گا
+    // بلڈ کے وقت ٹائپ سکرپٹ ایورز کو نظر انداز کرے گا
     ignoreBuildErrors: true,
   },
   eslint: {
-    // ESLint کے الرٹس بھی سکپ کرے گا
+    // بلڈ کے وقت ESLint ایورز کو نظر انداز کرے گا
     ignoreDuringBuilds: true,
-  },
-  async redirects() {
-    return [
-      {
-        source: '/',
-        destination: '/login',
-        permanent: true,
-      },
-    ];
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;
