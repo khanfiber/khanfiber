@@ -18,10 +18,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Wifi,
   Gauge,
-  DollarSign,
-  Package as PackageIcon
+  DollarSign
 } from 'lucide-react';
 
 interface PackageType {
@@ -54,11 +52,10 @@ export default function NewConnection() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // 1. خودکار سیریل نمبر اور Supabase سے پیکجز کی لسٹ فیچ کرنا
+  // 1. خودکار سیریل نمبر اور Supabase سے پیکجز کی فہرست فیچ کریں
   useEffect(() => {
     const initData = async () => {
       try {
-        // سیریل نمبر جنریٹ کریں
         const { count } = await supabase
           .from('customers')
           .select('*', { count: 'exact', head: true });
@@ -67,7 +64,7 @@ export default function NewConnection() {
         const formattedSerial = `KFN-${String(nextNum).padStart(4, '0')}`;
         setFormData(prev => ({ ...prev, serialNumber: formattedSerial }));
 
-        // ایڈمن کے تمام پیکجز فیچ کریں
+        // ایڈمن کے بنائے گئے تمام لائیو پیکجز فیچ کریں
         const { data: pkgData } = await supabase
           .from('packages')
           .select('*')
@@ -84,7 +81,7 @@ export default function NewConnection() {
     initData();
   }, [isSubmitted]);
 
-  // 2. پیکج سلیکٹ کرنے پر سپیڈ اور ماہانہ بل آٹو سیٹ کریں
+  // 2. پیکج سلیکٹ کرنے پر سپیڈ اور ماہانہ بل خودکار (Auto-Fill) سیٹ کریں
   const handlePackageSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedPkgName = e.target.value;
     const pkgObj = packagesList.find(p => p.package_name === selectedPkgName);
@@ -118,7 +115,7 @@ export default function NewConnection() {
     setIsSubmitted(false);
 
     try {
-      // 1. Supabase میں کسٹمر سیو کریں (ڈیفالٹ پورٹل پاسورڈ 12345 خودکار سیٹ ہو گا)
+      // Supabase میں کسٹمر محفوظ کریں (پورٹل پاسورڈ ڈیفالٹ 12345 ہوگا)
       const { error } = await supabase
         .from('customers')
         .insert([
@@ -137,7 +134,7 @@ export default function NewConnection() {
             connection_charges: formData.connectionCharges ? parseFloat(formData.connectionCharges) : 0,
             package_name: formData.packageName,
             speed: formData.speed,
-            password: '12345' // کسٹمر پورٹل لاگ ان پاسورڈ
+            password: '12345'
           }
         ]);
 
@@ -146,7 +143,7 @@ export default function NewConnection() {
       } else {
         setIsSubmitted(true);
 
-        // 2. واٹس ایپ پر ڈائریکٹ پورٹل لنک اور لاگ ان تفصیلات کے ساتھ میسج بھیجیں
+        // واٹس ایپ پر پورٹل لنک اور انسٹالیشن گائیڈ بھیجیں
         const targetPhone = formData.whatsapp || formData.phone;
         if (targetPhone) {
           const welcomeMessage = 
@@ -163,12 +160,12 @@ export default function NewConnection() {
             `👤 *یوزر نیم:* ${formData.pppoeUsername}\n` +
             `🔒 *پاسورڈ:* ${formData.pppoePassword}\n\n` +
             `🌐 *کسٹمر پورٹل و موبائل ایپ:* \n` +
-            `اپنے موبائل میں خان فائبر کی ایپ انسٹال کرنے یا آن لائن بل جمع کروانے کے لیے نیچے دیے گئے لنک پر کلک کریں:\n` +
+            `اپنے موبائل میں خان فائبر کی ایپ انسٹال کرنے کے لیے نیچے دیے گئے لنک پر کلک کریں:\n` +
             `👉 https://khanfiber.vercel.app\n\n` +
             `📱 *پورٹل لاگ ان تفصیلات:*\n` +
             `👤 *یوزر نیم / کسٹمر ID:* ${formData.serialNumber}\n` +
             `🔒 *پاسورڈ:* 12345\n` +
-            `*(آپ پورٹل میں لاگ ان کر کے اپنا پاسورڈ بھی تبدیل کر سکتے ہیں)*\n\n` +
+            `*(آپ پورٹل میں لاگ ان کر کے اپنا پاسورڈ تبدیل بھی کر سکتے ہیں)*\n\n` +
             `کسی بھی مسئلہ یا معلومات کی صورت میں رابطہ کریں۔\n` +
             `شکریہ! *خان فائبر نیٹ ورک ٹیم*`;
 
@@ -244,7 +241,7 @@ export default function NewConnection() {
                 نیا انٹرنیٹ کنکشن فارم (New Connection)
               </h2>
               <p style={{ margin: 0, fontSize: '9px', color: '#93c5fd' }}>
-                صارف کا نیا اندراج اور ڈائریکٹ واٹس ایپ نوٹیفکیشن
+                صارف کا نیا اندراج اور آٹو فِل پیکج تفصیلات
               </p>
             </div>
           </div>
@@ -265,7 +262,7 @@ export default function NewConnection() {
           </div>
         )}
 
-        {/* مین فارم */}
+        {/* فارم */}
         <form onSubmit={handleSubmit} style={{ backgroundColor: '#1c2541', borderRadius: '14px', padding: '16px', border: '1px solid #334155' }}>
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
@@ -280,7 +277,6 @@ export default function NewConnection() {
                   type="text" 
                   name="serialNumber" 
                   value={formData.serialNumber} 
-                  onChange={handleChange}
                   readOnly
                   style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #3b82f6', color: '#38bdf8', padding: '8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold' }} 
                 />
@@ -365,34 +361,32 @@ export default function NewConnection() {
             {/* 6. پیکیج سلیکٹ کریں (Auto-Fill Dropdown) */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#38bdf8', marginBottom: '4px' }}>
-                پیکیج منتخب کریں (Package)
+                پیکیج نام سلیکٹ کریں (Select Package)
               </label>
-              <div style={{ position: 'relative' }}>
-                <select
-                  value={formData.packageName}
-                  onChange={handlePackageSelect}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #38bdf8', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }}
-                >
-                  <option value="">پیکیج منتخب کریں...</option>
-                  {packagesList.map(pkg => (
-                    <option key={pkg.id} value={pkg.package_name}>
-                      {pkg.package_name} ({pkg.speed}) - Rs {pkg.price}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <select
+                value={formData.packageName}
+                onChange={handlePackageSelect}
+                style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #38bdf8', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px', outline: 'none' }}
+              >
+                <option value="">پیکیج منتخب کریں...</option>
+                {packagesList.map(pkg => (
+                  <option key={pkg.id} value={pkg.package_name}>
+                    {pkg.package_name} ({pkg.speed}) - Rs {pkg.price}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* 7. سپیڈ (خودکار) */}
+            {/* 7. سپیڈ (آٹو فِل) */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#38bdf8', marginBottom: '4px' }}>
-                انٹرنیٹ سپیڈ (Speed)
+                انٹرنیٹ سپیڈ (Speed - Auto)
               </label>
               <div style={{ position: 'relative' }}>
                 <input 
                   type="text" 
                   name="speed" 
-                  placeholder="مثلاً: 10 Mbps"
+                  placeholder="پیکج منتخب کرنے پر آٹو آئے گی"
                   value={formData.speed} 
                   onChange={handleChange}
                   style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #38bdf8', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }} 
@@ -419,17 +413,17 @@ export default function NewConnection() {
               </div>
             </div>
 
-            {/* 9. ماہانہ چارجز (خودکار) */}
+            {/* 9. ماہانہ چارجز (آٹو فِل) */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#34d399', marginBottom: '4px' }}>
-                ماہانہ چارجز (Monthly Charges Rs) *
+                ماہانہ چارجز (Monthly Price - Auto) *
               </label>
               <div style={{ position: 'relative' }}>
                 <input 
                   type="number" 
                   name="monthlyPrice" 
                   required
-                  placeholder="1500"
+                  placeholder="پیکج منتخب کرنے پر آٹو آئے گی"
                   value={formData.monthlyPrice} 
                   onChange={handleChange}
                   style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #10b981', color: '#34d399', padding: '8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold' }} 
@@ -493,7 +487,7 @@ export default function NewConnection() {
 
           </div>
 
-          {/* PPPoE کریڈینشلز */}
+          {/* PPPoE اکاؤنٹ کریڈینشلز */}
           <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px dashed #334155' }}>
             <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: '#38bdf8', marginBottom: '10px' }}>
               🔒 PPPoE اکاؤنٹ کریڈینشلز
@@ -501,7 +495,6 @@ export default function NewConnection() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
               
-              {/* PPPoE یوزر نیم */}
               <div>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
                   PPPoE یوزر نیم *
@@ -520,7 +513,6 @@ export default function NewConnection() {
                 </div>
               </div>
 
-              {/* PPPoE پاسورڈ */}
               <div>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#ffffff', marginBottom: '4px' }}>
                   PPPoE پاسورڈ *
@@ -542,7 +534,7 @@ export default function NewConnection() {
             </div>
           </div>
 
-          {/* ایکشن بٹنز */}
+          {/* بٹنز */}
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
             <button 
               type="button" 
