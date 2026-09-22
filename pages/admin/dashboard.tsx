@@ -16,8 +16,8 @@ import {
   Wrench,
   CreditCard,
   TrendingUp,
-  Layers,
-  List
+  List,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -25,58 +25,74 @@ export default function DashboardPage() {
     totalUsers: 0,
     collectedAmount: 0,
     pendingAmount: 0,
-    totalExpenses: 0
+    totalExpenses: 0,
+    pendingOnlinePayments: 0,
+    pendingComplaints: 0
   });
   const [loading, setLoading] = useState(true);
 
-  // Supabase سے لائیو شمار حاصل کرنا
-  useEffect(() => {
-    const fetchDashboardStats = async () => {
-      try {
-        // 1. کل یوزرز
-        const { count: usersCount } = await supabase
-          .from('customers')
-          .select('*', { count: 'exact', head: true });
+  // Supabase سے تمام شمار اور ریکویسٹس کی تعداد فیچ کرنا
+  const fetchDashboardStats = async () => {
+    try {
+      // 1. کل یوزرز
+      const { count: usersCount } = await supabase
+        .from('customers')
+        .select('*', { count: 'exact', head: true });
 
-        // 2. وصولی اور پینڈنگ رقم
-        const { data: colData } = await supabase
-          .from('collections')
-          .select('paid_amount, remaining_balance');
+      // 2. وصولی اور پینڈنگ رقم
+      const { data: colData } = await supabase
+        .from('collections')
+        .select('paid_amount, remaining_balance');
 
-        let totalPaid = 0;
-        let totalPending = 0;
-        if (colData) {
-          colData.forEach(item => {
-            totalPaid += Number(item.paid_amount || 0);
-            totalPending += Number(item.remaining_balance || 0);
-          });
-        }
-
-        // 3. کل اخراجات
-        const { data: expData } = await supabase
-          .from('expenses')
-          .select('amount');
-
-        let totalExp = 0;
-        if (expData) {
-          expData.forEach(item => {
-            totalExp += Number(item.amount || 0);
-          });
-        }
-
-        setStats({
-          totalUsers: usersCount || 0,
-          collectedAmount: totalPaid,
-          pendingAmount: totalPending,
-          totalExpenses: totalExp
+      let totalPaid = 0;
+      let totalPending = 0;
+      if (colData) {
+        colData.forEach(item => {
+          totalPaid += Number(item.paid_amount || 0);
+          totalPending += Number(item.remaining_balance || 0);
         });
-      } catch (err) {
-        console.error('Stats Error:', err);
-      } finally {
-        setLoading(false);
       }
-    };
 
+      // 3. کل اخراجات
+      const { data: expData } = await supabase
+        .from('expenses')
+        .select('amount');
+
+      let totalExp = 0;
+      if (expData) {
+        expData.forEach(item => {
+          totalExp += Number(item.amount || 0);
+        });
+      }
+
+      // 4. زیرِ التوا آن لائن پیمنٹس کی تعداد (Pending Online Payments)
+      const { count: pendingPayCount } = await supabase
+        .from('online_payments')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      // 5. زیرِ التوا شکایات کی تعداد (Pending Complaints)
+      const { count: pendingCompCount } = await supabase
+        .from('complaints')
+        .select('*', { count: 'exact', head: true })
+        .neq('status', 'resolved');
+
+      setStats({
+        totalUsers: usersCount || 0,
+        collectedAmount: totalPaid,
+        pendingAmount: totalPending,
+        totalExpenses: totalExp,
+        pendingOnlinePayments: pendingPayCount || 0,
+        pendingComplaints: pendingCompCount || 0
+      });
+    } catch (err) {
+      console.error('Dashboard Stats Fetch Error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchDashboardStats();
   }, []);
 
@@ -84,10 +100,10 @@ export default function DashboardPage() {
     <Layout showNavButtons={true}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', maxWidth: '1400px', margin: '0 auto' }}>
         
-        {/* 1. ٹاپ اینالیٹکس کاؤنٹرز (4 Compact Stats) */}
+        {/* 1. ٹاپ اینالیٹکس کاؤنٹرز (4 Stats Overview) */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
           gap: '10px',
           width: '100%'
         }}>
@@ -166,9 +182,14 @@ export default function DashboardPage() {
               </div>
             </Link>
 
-            {/* 2. آن لائن پیمنٹ */}
-            <Link href="/admin/online-payments" style={{ textDecoration: 'none' }}>
+            {/* 2. آن لائن پیمنٹ (ریکویسٹ کاؤنٹر کے ساتھ) */}
+            <Link href="/admin/online-payments" style={{ textDecoration: 'none', position: 'relative' }}>
               <div style={{ backgroundColor: '#0f172a', border: '1px solid #3b82f6', borderRadius: '10px', padding: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '6px', cursor: 'pointer' }}>
+                {stats.pendingOnlinePayments > 0 && (
+                  <span style={{ position: 'absolute', top: '-4px', right: '-4px', backgroundColor: '#ef4444', color: '#fff', fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '10px', border: '1px solid #fff' }}>
+                    {stats.pendingOnlinePayments}
+                  </span>
+                )}
                 <div style={{ backgroundColor: 'rgba(6, 182, 212, 0.2)', padding: '8px', borderRadius: '8px', color: '#22d3ee' }}>
                   <Globe size={18} />
                 </div>
@@ -177,7 +198,7 @@ export default function DashboardPage() {
             </Link>
 
             {/* 3. بل مینجمنٹ */}
-            <Link href="/admin/bill-collection" style={{ textDecoration: 'none' }}>
+            <Link href="/admin/bill-management" style={{ textDecoration: 'none' }}>
               <div style={{ backgroundColor: '#0f172a', border: '1px solid #3b82f6', borderRadius: '10px', padding: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '6px', cursor: 'pointer' }}>
                 <div style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', padding: '8px', borderRadius: '8px', color: '#60a5fa' }}>
                   <List size={18} />
@@ -267,9 +288,14 @@ export default function DashboardPage() {
               </div>
             </Link>
 
-            {/* 4. کیبل و شکایت */}
-            <Link href="/admin/user-list" style={{ textDecoration: 'none' }}>
+            {/* 4. کیبل و شکایت (پینڈنگ شکایت کاؤنٹر کے ساتھ) */}
+            <Link href="/admin/complaints" style={{ textDecoration: 'none', position: 'relative' }}>
               <div style={{ backgroundColor: '#0f172a', border: '1px solid #3b82f6', borderRadius: '10px', padding: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '6px', cursor: 'pointer' }}>
+                {stats.pendingComplaints > 0 && (
+                  <span style={{ position: 'absolute', top: '-4px', right: '-4px', backgroundColor: '#ef4444', color: '#fff', fontSize: '10px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '10px', border: '1px solid #fff' }}>
+                    {stats.pendingComplaints}
+                  </span>
+                )}
                 <div style={{ backgroundColor: 'rgba(245, 158, 11, 0.2)', padding: '8px', borderRadius: '8px', color: '#fbbf24' }}>
                   <Wrench size={18} />
                 </div>
@@ -278,7 +304,7 @@ export default function DashboardPage() {
             </Link>
 
             {/* 5. مائیکروٹک کنفیگ */}
-            <Link href="/admin/user-list" style={{ textDecoration: 'none' }}>
+            <Link href="/admin/mikrotik-config" style={{ textDecoration: 'none' }}>
               <div style={{ backgroundColor: '#0f172a', border: '1px solid #3b82f6', borderRadius: '10px', padding: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '6px', cursor: 'pointer' }}>
                 <div style={{ backgroundColor: 'rgba(6, 182, 212, 0.2)', padding: '8px', borderRadius: '8px', color: '#22d3ee' }}>
                   <Settings size={18} />
