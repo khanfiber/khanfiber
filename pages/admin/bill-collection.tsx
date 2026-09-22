@@ -18,6 +18,7 @@ interface CustomerType {
   phone: string;
   whatsapp: string;
   monthly_price: number;
+  connection_charges?: number;
 }
 
 export default function BillCollection() {
@@ -51,6 +52,7 @@ export default function BillCollection() {
     setSearchTerm(customer.full_name || customer.pppoe_username);
     setCurrentBill(customer.monthly_price || 0);
 
+    // 1. چیک کریں کہ کیا کسٹمر کی پہلے کوئی وصولی موجود ہے؟
     const { data } = await supabase
       .from('collections')
       .select('remaining_balance')
@@ -59,9 +61,11 @@ export default function BillCollection() {
       .limit(1);
 
     if (data && data.length > 0) {
+      // اگر پرانی ہسٹری ہے تو بقیہ رقم لیں
       setPreviousArrears(data[0].remaining_balance || 0);
     } else {
-      setPreviousArrears(0);
+      // اگر پہلا بل ہے تو کنکشن چارجز کو بطور پچھلا بقایا دکھائیں
+      setPreviousArrears(customer.connection_charges || 0);
     }
   };
 
@@ -99,7 +103,7 @@ export default function BillCollection() {
       } else {
         setIsSuccess(true);
 
-        // 2. ڈائریکٹ واٹس ایپ کھولیں
+        // 2. ڈائریکٹ واٹس ایپ ونڈو اوپن کریں
         const targetPhone = selectedCustomer.whatsapp || selectedCustomer.phone;
         
         if (targetPhone) {
@@ -107,14 +111,13 @@ export default function BillCollection() {
             `*خان فائبر انٹرنیٹ نیٹ ورک - بل رسید*\n\n` +
             `محترم *${selectedCustomer.full_name}*!\n` +
             `آپ کی بل وصولی کامیابی سے درج کر لی گئی ہے۔\n\n` +
-            `▫️ پچھلا بقایا: Rs ${previousArrears}\n` +
-            `▫️ موجودہ بل: Rs ${currentBill}\n` +
+            `▫️ پچھلا بقایاجات/کنکشن چارجز: Rs ${previousArrears}\n` +
+            `▫️ موجودہ ماہانہ بل: Rs ${currentBill}\n` +
             `▫️ کل رقم: Rs ${totalAmount}\n` +
             `✅ *جمع کردہ رقم:* Rs ${numericPaid}\n` +
             `🔻 *بقیہ واجبات:* Rs ${remainingBalance}\n\n` +
-            `شکریہ! خان فائبر ٹیم`;
+            `شکریہ! *خان فائبر نیٹ ورک ٹیم*`;
 
-          // واٹس ایپ اوپن کریں
           openWhatsAppDirect(targetPhone, whatsappMsg);
         }
 
@@ -161,7 +164,7 @@ export default function BillCollection() {
         {isSuccess && (
           <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', color: '#34d399', padding: '10px 14px', borderRadius: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <CheckCircle2 size={16} />
-            بل محفوظ ہو گیا اور واٹس ایپ ونڈو کھول دی گئی ہے!
+            بل محفوظ ہو گیا اور واٹس ایپ رسید کھول دی گئی ہے!
           </div>
         )}
 
@@ -215,7 +218,7 @@ export default function BillCollection() {
             {/* پچھلا بقایاجات */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', color: '#f87171', fontWeight: 'bold', marginBottom: '4px' }}>
-                پچھلا بقایاجات (Arrears)
+                پچھلا بقایاجات / کنکشن چارجز
               </label>
               <input 
                 type="text" 
