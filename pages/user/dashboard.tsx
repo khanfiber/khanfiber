@@ -38,19 +38,20 @@ export default function UserDashboard() {
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
           const parsedUser = JSON.parse(storedUser);
-          
+          const customerId = parsedUser.id || parsedUser.customer_id;
+
           // Supabase سے کسٹمر کی لائیو انفارمیشن فیچ کریں
           const { data: custData } = await supabase
             .from('customers')
             .select('*')
-            .eq('id', parsedUser.id || parsedUser.customer_id)
+            .eq('id', customerId)
             .single();
 
           // آخری وصولی (Collection) سے بقایا رقم (Remaining Balance) فیچ کریں
           const { data: colData } = await supabase
             .from('collections')
             .select('remaining_balance')
-            .eq('customer_id', parsedUser.id || parsedUser.customer_id)
+            .eq('customer_id', customerId)
             .order('id', { ascending: false })
             .limit(1);
 
@@ -176,7 +177,7 @@ export default function UserDashboard() {
 
         </div>
 
-        {/* 3. یوزر نیویگیشن بٹنز (Action Grid) */}
+        {/* 3. یوزر نیویگیشن بٹنز (Quick Actions) */}
         <div style={{ backgroundColor: '#1c2541', border: '1px solid #334155', borderRadius: '16px', padding: '16px' }}>
           <h3 style={{ margin: '0 0 14px 0', fontSize: '14px', fontWeight: 'bold', color: '#38bdf8', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>
             ⚡ کوئیک مینو (Quick Actions)
@@ -200,14 +201,14 @@ export default function UserDashboard() {
             </Link>
 
             {/* 2. چیک سپیڈ */}
-            <a href="https://fast.com" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+            <Link href="/user/check-speed" style={{ textDecoration: 'none' }}>
               <div style={{ backgroundColor: '#0f172a', border: '1px solid #3b82f6', borderRadius: '12px', padding: '12px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '8px', cursor: 'pointer' }}>
                 <div style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', padding: '10px', borderRadius: '10px', color: '#60a5fa' }}>
                   <Activity size={20} />
                 </div>
                 <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ffffff' }}>چیک سپیڈ</span>
               </div>
-            </a>
+            </Link>
 
             {/* 3. پیکج */}
             <Link href="/user/packages" style={{ textDecoration: 'none' }}>
