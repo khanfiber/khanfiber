@@ -85,7 +85,6 @@ export default function Layout({
 
     if (user?.role === 'admin') {
       localStorage.setItem('admin_password', newPassword);
-
       setMsg('ایڈمن پاسورڈ کامیابی سے تبدیل ہو گیا!');
     } else if (user?.id) {
       const { error } = await supabase
@@ -126,8 +125,7 @@ export default function Layout({
           <div className="header-inner">
 
             {/* =================================================
-                RIGHT SIDE
-                ONE CLICK LOGO + NAME
+                RIGHT SIDE - ONE CLICK
             ================================================= */}
 
             <div className="brand-area">
@@ -159,30 +157,24 @@ export default function Layout({
 
 
             {/* =================================================
-                CENTER
-                HAIDER FIBER NETWORK BANNER
+                CENTER - HAIDER FIBER
             ================================================= */}
 
             <div className="haider-banner-area">
 
-              <div className="haider-banner-glow" />
-
               <div className="haider-banner-frame">
-
                 <img
                   src="/haider-fiber.png"
                   alt="Haider Fiber Network"
                   className="haider-banner-image"
                 />
-
               </div>
 
             </div>
 
 
             {/* =================================================
-                LEFT SIDE
-                DASHBOARD + ACCOUNT
+                LEFT SIDE - ACCOUNT
             ================================================= */}
 
             <div className="header-actions">
@@ -211,7 +203,7 @@ export default function Layout({
                 >
 
                   <ChevronDown
-                    size={16}
+                    size={15}
                     className={
                       showMenu
                         ? 'chevron chevron-open'
@@ -220,7 +212,7 @@ export default function Layout({
                   />
 
                   <div className="profile-icon">
-                    <User size={19} />
+                    <User size={18} />
                   </div>
 
                   <div className="profile-name">
@@ -233,9 +225,7 @@ export default function Layout({
                 </button>
 
 
-                {/* =============================================
-                    DROPDOWN
-                ============================================= */}
+                {/* DROPDOWN */}
 
                 {showMenu && (
                   <div className="profile-menu">
@@ -273,10 +263,7 @@ export default function Layout({
                       }}
                     >
                       <KeyRound size={16} />
-
-                      <span>
-                        پاسورڈ تبدیل کریں
-                      </span>
+                      <span>پاسورڈ تبدیل کریں</span>
                     </button>
 
 
@@ -286,10 +273,7 @@ export default function Layout({
                       onClick={handleLogout}
                     >
                       <LogOut size={16} />
-
-                      <span>
-                        لاگ آؤٹ کریں
-                      </span>
+                      <span>لاگ آؤٹ کریں</span>
                     </button>
 
                   </div>
@@ -314,7 +298,7 @@ export default function Layout({
 
 
         {/* =====================================================
-            PREMIUM FOOTER
+            FOOTER
         ===================================================== */}
 
         <footer className="premium-footer">
@@ -331,8 +315,7 @@ export default function Layout({
               />
 
               <span>
-                © {new Date().getFullYear()} One Click •
-                Haider Fiber Network
+                © {new Date().getFullYear()} One Click • Haider Fiber Network
               </span>
 
               <span className="footer-separator">
@@ -369,7 +352,7 @@ export default function Layout({
 
 
         {/* =====================================================
-            CHANGE PASSWORD MODAL
+            PASSWORD MODAL
         ===================================================== */}
 
         {showPasswordModal && (
@@ -437,7 +420,6 @@ export default function Layout({
                   className="save-password-button"
                 >
                   <KeyRound size={15} />
-
                   پاسورڈ محفوظ کریں
                 </button>
 
@@ -452,7 +434,7 @@ export default function Layout({
 
 
       {/* =====================================================
-          ALL STYLES
+          STYLES
       ===================================================== */}
 
       <style jsx global>{`
@@ -482,13 +464,9 @@ export default function Layout({
 
         .app-shell {
           min-height: 100vh;
-
           color: #ffffff;
-
           direction: rtl;
-
           display: flex;
-
           flex-direction: column;
 
           background:
@@ -512,13 +490,9 @@ export default function Layout({
 
         .premium-header {
           width: 100%;
-
           position: sticky;
-
           top: 0;
-
           z-index: 50;
-
           overflow: visible;
 
           background:
@@ -533,38 +507,34 @@ export default function Layout({
             1px solid rgba(56, 189, 248, 0.14);
 
           box-shadow:
-            0 12px 35px rgba(0, 0, 0, 0.28);
+            0 8px 30px rgba(0, 0, 0, 0.25);
         }
 
 
         .header-inner {
           position: relative;
-
           z-index: 2;
 
           width: 100%;
-
           max-width: 1500px;
 
-          min-height: 100px;
+          min-height: 92px;
 
           margin: 0 auto;
-
-          padding: 12px 22px;
+          padding: 10px 18px;
 
           display: grid;
 
           grid-template-columns:
-            minmax(210px, 0.8fr)
-            minmax(300px, 1.45fr)
-            minmax(190px, 0.75fr);
+            minmax(210px, 0.85fr)
+            minmax(300px, 1.5fr)
+            minmax(190px, 0.8fr);
 
           grid-template-areas:
             "brand banner actions";
 
           align-items: center;
-
-          gap: 22px;
+          gap: 18px;
 
           direction: rtl;
         }
@@ -572,11 +542,8 @@ export default function Layout({
 
         .header-glow {
           position: absolute;
-
           border-radius: 999px;
-
           filter: blur(60px);
-
           pointer-events: none;
         }
 
@@ -584,26 +551,18 @@ export default function Layout({
         .header-glow-one {
           width: 250px;
           height: 100px;
-
           right: 5%;
-
           top: -50px;
-
-          background:
-            rgba(6, 182, 212, 0.12);
+          background: rgba(6, 182, 212, 0.12);
         }
 
 
         .header-glow-two {
           width: 300px;
           height: 100px;
-
           left: 25%;
-
           bottom: -70px;
-
-          background:
-            rgba(37, 99, 235, 0.10);
+          background: rgba(37, 99, 235, 0.10);
         }
 
 
@@ -615,33 +574,26 @@ export default function Layout({
           grid-area: brand;
 
           display: flex;
-
           align-items: center;
-
           justify-content: flex-start;
 
-          gap: 12px;
-
+          gap: 10px;
           min-width: 0;
         }
 
 
         .brand-logo-wrap {
-          width: 68px;
-          height: 68px;
+          width: 62px;
+          height: 62px;
 
           flex-shrink: 0;
-
           position: relative;
 
-          border-radius: 20px;
-
+          border-radius: 18px;
           padding: 3px;
 
           display: flex;
-
           align-items: center;
-
           justify-content: center;
 
           background:
@@ -655,8 +607,7 @@ export default function Layout({
             1px solid rgba(34, 211, 238, 0.50);
 
           box-shadow:
-            0 0 22px rgba(6, 182, 212, 0.16),
-            inset 0 0 15px rgba(56, 189, 248, 0.06);
+            0 0 22px rgba(6, 182, 212, 0.16);
 
           overflow: visible;
         }
@@ -665,10 +616,8 @@ export default function Layout({
         .brand-logo {
           width: 100%;
           height: 100%;
-
           object-fit: contain;
-
-          border-radius: 17px;
+          border-radius: 15px;
         }
 
 
@@ -678,8 +627,8 @@ export default function Layout({
           bottom: -3px;
           left: -3px;
 
-          width: 16px;
-          height: 16px;
+          width: 15px;
+          height: 15px;
 
           border-radius: 50%;
 
@@ -699,15 +648,12 @@ export default function Layout({
 
         .brand-name {
           direction: ltr;
-
           white-space: nowrap;
 
-          font-size: 24px;
-
+          font-size: 23px;
           line-height: 1.05;
 
           font-weight: 900;
-
           letter-spacing: -0.7px;
         }
 
@@ -726,12 +672,11 @@ export default function Layout({
 
 
         .brand-subtitle {
-          margin-top: 6px;
+          margin-top: 5px;
 
           color: #64748b;
 
-          font-size: 10px;
-
+          font-size: 9px;
           font-weight: 700;
 
           white-space: nowrap;
@@ -745,73 +690,38 @@ export default function Layout({
         .haider-banner-area {
           grid-area: banner;
 
-          position: relative;
-
           width: 100%;
+          max-width: 520px;
 
-          max-width: 610px;
+          min-width: 0;
 
           justify-self: center;
 
           display: flex;
-
           align-items: center;
-
           justify-content: center;
-        }
-
-
-        .haider-banner-glow {
-          position: absolute;
-
-          width: 90%;
-          height: 65%;
-
-          border-radius: 50%;
-
-          background:
-            rgba(34, 197, 94, 0.09);
-
-          filter: blur(35px);
-
-          pointer-events: none;
         }
 
 
         .haider-banner-frame {
-          position: relative;
-
-          z-index: 2;
-
           width: 100%;
-
-          height: 76px;
-
-          padding: 3px;
+          height: 64px;
 
           overflow: hidden;
 
           display: flex;
-
           align-items: center;
-
           justify-content: center;
 
-          border-radius: 12px;
+          border-radius: 10px;
 
-          background:
-            linear-gradient(
-              135deg,
-              rgba(255,255,255,0.98),
-              rgba(240,249,255,0.98)
-            );
+          background: #ffffff;
 
           border:
-            1px solid rgba(125, 211, 252, 0.45);
+            1px solid rgba(125, 211, 252, 0.35);
 
           box-shadow:
-            0 8px 28px rgba(0,0,0,0.20),
-            0 0 18px rgba(56,189,248,0.08);
+            0 6px 20px rgba(0, 0, 0, 0.18);
         }
 
 
@@ -823,7 +733,7 @@ export default function Layout({
 
           object-fit: contain;
 
-          border-radius: 9px;
+          object-position: center;
         }
 
 
@@ -835,28 +745,25 @@ export default function Layout({
           grid-area: actions;
 
           display: flex;
-
           align-items: center;
-
           justify-content: flex-end;
 
-          gap: 9px;
+          gap: 8px;
 
           direction: rtl;
+
+          min-width: 0;
         }
 
 
         .dashboard-button {
           min-height: 42px;
-
           padding: 0 12px;
 
           border-radius: 12px;
 
           display: flex;
-
           align-items: center;
-
           justify-content: center;
 
           gap: 6px;
@@ -866,7 +773,6 @@ export default function Layout({
           text-decoration: none;
 
           font-size: 10px;
-
           font-weight: 800;
 
           background:
@@ -874,18 +780,6 @@ export default function Layout({
 
           border:
             1px solid rgba(56, 189, 248, 0.22);
-
-          transition:
-            all 0.2s ease;
-        }
-
-
-        .dashboard-button:hover {
-          border-color:
-            rgba(56, 189, 248, 0.55);
-
-          background:
-            rgba(14, 165, 233, 0.10);
         }
 
 
@@ -899,9 +793,9 @@ export default function Layout({
 
 
         .profile-button {
-          min-height: 48px;
+          min-height: 46px;
 
-          padding: 5px 7px 5px 10px;
+          padding: 5px 7px 5px 9px;
 
           border-radius: 14px;
 
@@ -920,44 +814,26 @@ export default function Layout({
           cursor: pointer;
 
           display: flex;
-
           align-items: center;
 
-          gap: 7px;
-
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.03);
-
-          transition:
-            all 0.2s ease;
-        }
-
-
-        .profile-button:hover {
-          border-color:
-            rgba(34, 211, 238, 0.45);
+          gap: 6px;
         }
 
 
         .profile-icon {
-          width: 36px;
-          height: 36px;
+          width: 35px;
+          height: 35px;
 
           border-radius: 11px;
 
           display: flex;
-
           align-items: center;
-
           justify-content: center;
 
           color: #22d3ee;
 
           background:
             rgba(6, 182, 212, 0.12);
-
-          border:
-            1px solid rgba(34, 211, 238, 0.10);
         }
 
 
@@ -965,22 +841,17 @@ export default function Layout({
           max-width: 85px;
 
           overflow: hidden;
-
           text-overflow: ellipsis;
-
           white-space: nowrap;
 
           font-size: 10px;
-
           font-weight: 800;
         }
 
 
         .chevron {
           color: #64748b;
-
-          transition:
-            transform 0.2s ease;
+          transition: transform 0.2s ease;
         }
 
 
@@ -990,14 +861,13 @@ export default function Layout({
 
 
         /* ===================================================
-           PROFILE DROPDOWN
+           DROPDOWN
         =================================================== */
 
         .profile-menu {
           position: absolute;
 
           top: calc(100% + 9px);
-
           left: 0;
 
           width: 210px;
@@ -1023,7 +893,6 @@ export default function Layout({
           padding: 12px;
 
           display: flex;
-
           align-items: center;
 
           gap: 9px;
@@ -1042,9 +911,7 @@ export default function Layout({
           border-radius: 11px;
 
           display: flex;
-
           align-items: center;
-
           justify-content: center;
 
           color: #22d3ee;
@@ -1056,9 +923,7 @@ export default function Layout({
 
         .menu-user-name {
           color: #f8fafc;
-
           font-size: 11px;
-
           font-weight: 900;
         }
 
@@ -1086,7 +951,6 @@ export default function Layout({
           cursor: pointer;
 
           display: flex;
-
           align-items: center;
 
           gap: 8px;
@@ -1094,7 +958,6 @@ export default function Layout({
           text-align: right;
 
           font-size: 10px;
-
           font-weight: 800;
         }
 
@@ -1119,14 +982,13 @@ export default function Layout({
 
 
         /* ===================================================
-           CONTENT
+           PAGE
         =================================================== */
 
         .page-content {
           flex: 1;
 
           width: 100%;
-
           max-width: 1400px;
 
           margin: 0 auto;
@@ -1160,7 +1022,6 @@ export default function Layout({
 
         .footer-line {
           height: 1px;
-
           width: 100%;
 
           background:
@@ -1175,7 +1036,7 @@ export default function Layout({
 
 
         .footer-content {
-          min-height: 72px;
+          min-height: 70px;
 
           max-width: 1400px;
 
@@ -1184,9 +1045,7 @@ export default function Layout({
           padding: 12px 18px;
 
           display: flex;
-
           align-items: center;
-
           justify-content: space-between;
 
           gap: 15px;
@@ -1197,7 +1056,6 @@ export default function Layout({
 
         .footer-copyright {
           display: flex;
-
           align-items: center;
 
           gap: 6px;
@@ -1205,7 +1063,6 @@ export default function Layout({
           color: #64748b;
 
           font-size: 9px;
-
           font-weight: 600;
         }
 
@@ -1224,7 +1081,6 @@ export default function Layout({
           direction: ltr;
 
           display: flex;
-
           align-items: center;
 
           gap: 5px;
@@ -1248,9 +1104,7 @@ export default function Layout({
 
         .powered-small {
           color: #64748b;
-
           font-size: 8px;
-
           font-weight: 600;
         }
 
@@ -1259,13 +1113,9 @@ export default function Layout({
           color: #22d3ee;
 
           font-size: 9px;
-
           font-weight: 900;
 
           letter-spacing: 0.15px;
-
-          text-shadow:
-            0 0 10px rgba(34,211,238,0.14);
         }
 
 
@@ -1275,7 +1125,6 @@ export default function Layout({
 
         .modal-overlay {
           position: fixed;
-
           inset: 0;
 
           z-index: 200;
@@ -1283,9 +1132,7 @@ export default function Layout({
           padding: 16px;
 
           display: flex;
-
           align-items: center;
-
           justify-content: center;
 
           background:
@@ -1297,7 +1144,6 @@ export default function Layout({
 
         .password-modal {
           width: 100%;
-
           max-width: 350px;
 
           position: relative;
@@ -1333,13 +1179,10 @@ export default function Layout({
           height: 31px;
 
           border: 0;
-
           border-radius: 9px;
 
           display: flex;
-
           align-items: center;
-
           justify-content: center;
 
           cursor: pointer;
@@ -1358,9 +1201,7 @@ export default function Layout({
           margin: 0 auto 10px;
 
           display: flex;
-
           align-items: center;
-
           justify-content: center;
 
           border-radius: 14px;
@@ -1381,7 +1222,6 @@ export default function Layout({
           color: #f8fafc;
 
           font-size: 15px;
-
           font-weight: 900;
         }
 
@@ -1403,7 +1243,6 @@ export default function Layout({
           border-radius: 9px;
 
           display: flex;
-
           align-items: center;
 
           gap: 6px;
@@ -1424,7 +1263,6 @@ export default function Layout({
 
         .password-form {
           display: flex;
-
           flex-direction: column;
 
           gap: 10px;
@@ -1463,15 +1301,12 @@ export default function Layout({
           padding: 10px;
 
           border: 0;
-
           border-radius: 10px;
 
           cursor: pointer;
 
           display: flex;
-
           align-items: center;
-
           justify-content: center;
 
           gap: 6px;
@@ -1479,7 +1314,6 @@ export default function Layout({
           color: #ffffff;
 
           font-size: 11px;
-
           font-weight: 900;
 
           background:
@@ -1488,9 +1322,6 @@ export default function Layout({
               #0891b2,
               #2563eb
             );
-
-          box-shadow:
-            0 8px 20px rgba(37,99,235,0.20);
         }
 
 
@@ -1502,32 +1333,33 @@ export default function Layout({
 
           .header-inner {
             grid-template-columns:
-              minmax(170px, 0.8fr)
-              minmax(240px, 1.3fr)
+              minmax(165px, 0.9fr)
+              minmax(220px, 1.3fr)
               auto;
 
-            gap: 12px;
+            gap: 10px;
 
-            padding:
-              10px 12px;
+            padding: 9px 12px;
+
+            min-height: 82px;
           }
 
 
           .haider-banner-frame {
-            height: 65px;
+            height: 55px;
           }
 
 
           .brand-logo-wrap {
-            width: 58px;
-            height: 58px;
+            width: 54px;
+            height: 54px;
 
-            border-radius: 17px;
+            border-radius: 16px;
           }
 
 
           .brand-logo {
-            border-radius: 14px;
+            border-radius: 13px;
           }
 
 
@@ -1552,7 +1384,7 @@ export default function Layout({
 
 
           .dashboard-button {
-            width: 43px;
+            width: 42px;
             padding: 0;
           }
 
@@ -1560,95 +1392,175 @@ export default function Layout({
 
 
         /* ===================================================
-           MOBILE
+           MOBILE - IMPORTANT FIX
         =================================================== */
 
         @media (max-width: 650px) {
 
-          .premium-header {
-            position: sticky;
-          }
-
-
           .header-inner {
-            min-height: auto;
 
-            padding:
-              10px 10px 11px;
+            /*
+              موبائل پر تینوں چیزیں ایک ہی لائن میں رہیں گی
+              LEFT = account
+              CENTER = Haider Fiber
+              RIGHT = One Click
+            */
+
+            display: grid;
 
             grid-template-columns:
-              1fr auto;
+              minmax(94px, 0.9fr)
+              minmax(105px, 1.15fr)
+              minmax(105px, 1fr);
 
             grid-template-areas:
-              "brand actions"
-              "banner banner";
+              "brand banner actions";
 
-            gap:
-              10px 8px;
+            align-items: center;
+
+            gap: 6px;
+
+            min-height: 72px;
+
+            padding: 8px 8px;
           }
 
 
-          /* ONE CLICK */
+          /* ------------------------------
+             ONE CLICK
+          ------------------------------ */
 
           .brand-area {
-            justify-content: flex-start;
+            min-width: 0;
 
-            gap: 8px;
+            gap: 5px;
+
+            justify-content: flex-start;
           }
 
 
           .brand-logo-wrap {
-            width: 53px;
-            height: 53px;
+            width: 43px;
+            height: 43px;
 
-            border-radius: 15px;
+            flex: 0 0 43px;
+
+            border-radius: 13px;
+
+            padding: 2px;
           }
 
 
           .brand-logo {
-            border-radius: 12px;
+            border-radius: 11px;
           }
 
 
           .online-dot {
-            width: 13px;
-            height: 13px;
+            width: 11px;
+            height: 11px;
+
+            bottom: -2px;
+            left: -2px;
 
             border-width: 2px;
           }
 
 
           .brand-name {
-            font-size: 18px;
+            font-size: 15px;
+
+            letter-spacing: -0.4px;
           }
 
 
           .brand-subtitle {
-            margin-top: 4px;
+            margin-top: 3px;
 
-            font-size: 7.5px;
+            font-size: 6px;
+
+            max-width: 85px;
+
+            overflow: hidden;
+
+            white-space: nowrap;
           }
 
 
-          /* ACTION */
+          /* ------------------------------
+             HAIDER FIBER CENTER
+          ------------------------------ */
+
+          .haider-banner-area {
+            width: 100%;
+
+            min-width: 0;
+
+            max-width: 170px;
+
+            justify-self: center;
+          }
+
+
+          .haider-banner-frame {
+            width: 100%;
+
+            height: 43px;
+
+            border-radius: 7px;
+
+            padding: 0;
+
+            background: #ffffff;
+
+            overflow: hidden;
+
+            box-shadow:
+              0 3px 12px rgba(0,0,0,0.18);
+          }
+
+
+          .haider-banner-image {
+            width: 100%;
+            height: 100%;
+
+            object-fit: contain;
+
+            object-position: center;
+
+            display: block;
+          }
+
+
+          /* ------------------------------
+             ACCOUNT
+          ------------------------------ */
 
           .header-actions {
-            gap: 6px;
+            min-width: 0;
+
+            gap: 4px;
+
+            justify-content: flex-end;
           }
 
 
           .profile-button {
-            min-height: 45px;
+            min-height: 43px;
 
-            padding: 4px 6px;
+            padding: 3px 5px;
 
-            border-radius: 13px;
+            gap: 4px;
+
+            border-radius: 12px;
           }
 
 
           .profile-icon {
-            width: 34px;
-            height: 34px;
+            width: 32px;
+            height: 32px;
+
+            border-radius: 9px;
           }
 
 
@@ -1657,11 +1569,19 @@ export default function Layout({
           }
 
 
+          .chevron {
+            width: 13px;
+            height: 13px;
+          }
+
+
           .dashboard-button {
-            width: 42px;
-            min-height: 42px;
+            width: 37px;
+            min-height: 39px;
 
             padding: 0;
+
+            border-radius: 10px;
           }
 
 
@@ -1670,52 +1590,36 @@ export default function Layout({
           }
 
 
-          /* HAIDER FIBER IMAGE */
+          .profile-menu {
+            left: 0;
 
-          .haider-banner-area {
-            width: 100%;
-
-            max-width: none;
+            width: 190px;
           }
 
 
-          .haider-banner-frame {
-            width: 100%;
-
-            height: 67px;
-
-            border-radius: 11px;
-          }
-
-
-          .haider-banner-image {
-            object-fit: contain;
-
-            border-radius: 8px;
-          }
-
-
-          /* CONTENT */
+          /* ------------------------------
+             CONTENT
+          ------------------------------ */
 
           .page-content {
-            padding:
-              14px 10px;
+            padding: 13px 10px;
           }
 
 
-          /* FOOTER */
+          /* ------------------------------
+             FOOTER
+          ------------------------------ */
 
           .footer-content {
-            min-height: 85px;
+            min-height: 82px;
 
-            padding:
-              12px 10px;
+            padding: 11px 10px;
 
             justify-content: center;
 
             flex-direction: column;
 
-            gap: 8px;
+            gap: 7px;
           }
 
 
@@ -1729,18 +1633,6 @@ export default function Layout({
             font-size: 8px;
           }
 
-
-          .powered-name {
-            font-size: 9px;
-          }
-
-
-          .profile-menu {
-            left: 0;
-
-            width: 195px;
-          }
-
         }
 
 
@@ -1750,35 +1642,96 @@ export default function Layout({
 
         @media (max-width: 390px) {
 
-          .brand-name {
-            font-size: 16px;
-          }
+          .header-inner {
+            grid-template-columns:
+              minmax(88px, 0.9fr)
+              minmax(92px, 1.1fr)
+              minmax(96px, 1fr);
 
+            gap: 4px;
 
-          .brand-subtitle {
-            font-size: 7px;
+            padding-left: 6px;
+            padding-right: 6px;
           }
 
 
           .brand-logo-wrap {
-            width: 48px;
-            height: 48px;
+            width: 38px;
+            height: 38px;
+
+            flex-basis: 38px;
           }
 
 
-          .profile-icon {
-            width: 31px;
-            height: 31px;
+          .brand-name {
+            font-size: 13px;
           }
 
 
-          .profile-button {
-            min-height: 41px;
+          .brand-subtitle {
+            font-size: 5.5px;
+
+            max-width: 72px;
+          }
+
+
+          .haider-banner-area {
+            max-width: 140px;
           }
 
 
           .haider-banner-frame {
-            height: 61px;
+            height: 39px;
+
+            border-radius: 6px;
+          }
+
+
+          .profile-button {
+            min-height: 39px;
+          }
+
+
+          .profile-icon {
+            width: 29px;
+            height: 29px;
+          }
+
+        }
+
+
+        /* ===================================================
+           VERY SMALL MOBILE
+        =================================================== */
+
+        @media (max-width: 340px) {
+
+          .brand-subtitle {
+            display: none;
+          }
+
+
+          .brand-name {
+            font-size: 12px;
+          }
+
+
+          .brand-logo-wrap {
+            width: 35px;
+            height: 35px;
+
+            flex-basis: 35px;
+          }
+
+
+          .haider-banner-frame {
+            height: 36px;
+          }
+
+
+          .profile-icon {
+            width: 27px;
+            height: 27px;
           }
 
         }
