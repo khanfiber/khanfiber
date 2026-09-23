@@ -64,7 +64,7 @@ export default function NewConnection() {
         const formattedSerial = `KFN-${String(nextNum).padStart(4, '0')}`;
         setFormData(prev => ({ ...prev, serialNumber: formattedSerial }));
 
-        // ایڈمن کے بنائے گئے تمام لائیو پیکجز فیچ کریں
+        // لائیو پیکجز فیچ کریں
         const { data: pkgData } = await supabase
           .from('packages')
           .select('*')
@@ -81,7 +81,7 @@ export default function NewConnection() {
     initData();
   }, [isSubmitted]);
 
-  // 2. پیکج سلیکٹ کرنے پر سپیڈ اور ماہانہ بل خودکار (Auto-Fill) سیٹ کریں
+  // 2. پیکج سلیکٹ کرنے پر سپیڈ اور ماہانہ چارجز خودکار (Auto-Fill) ہوں گے
   const handlePackageSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedPkgName = e.target.value;
     const pkgObj = packagesList.find(p => p.package_name === selectedPkgName);
@@ -278,9 +278,9 @@ export default function NewConnection() {
                   name="serialNumber" 
                   value={formData.serialNumber} 
                   readOnly
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #3b82f6', color: '#38bdf8', padding: '8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold' }} 
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #3b82f6', color: '#38bdf8', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', boxSizing: 'border-box' }} 
                 />
-                <Hash size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+                <Hash size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
@@ -297,9 +297,9 @@ export default function NewConnection() {
                   placeholder="صارف کا مکمل نام"
                   value={formData.fullName} 
                   onChange={handleChange}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }} 
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', boxSizing: 'border-box' }} 
                 />
-                <User size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+                <User size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
@@ -315,9 +315,9 @@ export default function NewConnection() {
                   placeholder="والد کا نام"
                   value={formData.fatherName} 
                   onChange={handleChange}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }} 
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', boxSizing: 'border-box' }} 
                 />
-                <User size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+                <User size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
@@ -334,9 +334,9 @@ export default function NewConnection() {
                   placeholder="03001234567"
                   value={formData.phone} 
                   onChange={handleChange}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }} 
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', boxSizing: 'border-box', direction: 'ltr', textAlign: 'right' }} 
                 />
-                <Phone size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+                <Phone size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
@@ -352,13 +352,13 @@ export default function NewConnection() {
                   placeholder="03001234567"
                   value={formData.whatsapp} 
                   onChange={handleChange}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }} 
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', boxSizing: 'border-box', direction: 'ltr', textAlign: 'right' }} 
                 />
-                <MessageSquare size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+                <MessageSquare size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
-            {/* 6. پیکیج سلیکٹ کریں (Auto-Fill Dropdown) */}
+            {/* 6. پیکیج نام سلیکٹ کریں */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#38bdf8', marginBottom: '4px' }}>
                 پیکیج نام سلیکٹ کریں (Select Package)
@@ -366,7 +366,7 @@ export default function NewConnection() {
               <select
                 value={formData.packageName}
                 onChange={handlePackageSelect}
-                style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #38bdf8', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px', outline: 'none' }}
+                style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #38bdf8', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}
               >
                 <option value="">پیکیج منتخب کریں...</option>
                 {packagesList.map(pkg => (
@@ -377,7 +377,7 @@ export default function NewConnection() {
               </select>
             </div>
 
-            {/* 7. سپیڈ (آٹو فِل) */}
+            {/* 7. انٹرنیٹ سپیڈ (آٹو فِل) */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#38bdf8', marginBottom: '4px' }}>
                 انٹرنیٹ سپیڈ (Speed - Auto)
@@ -389,13 +389,13 @@ export default function NewConnection() {
                   placeholder="پیکج منتخب کرنے پر آٹو آئے گی"
                   value={formData.speed} 
                   onChange={handleChange}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #38bdf8', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }} 
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #38bdf8', color: '#ffffff', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', boxSizing: 'border-box' }} 
                 />
-                <Gauge size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#38bdf8' }} />
+                <Gauge size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#38bdf8' }} />
               </div>
             </div>
 
-            {/* 8. کنکشن چارجز */}
+            {/* 8. کنکشن چارجز (مینول) */}
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#f472b6', marginBottom: '4px' }}>
                 کنکشن چارجز (Connection Charges Rs)
@@ -407,9 +407,9 @@ export default function NewConnection() {
                   placeholder="2000"
                   value={formData.connectionCharges} 
                   onChange={handleChange}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #ec4899', color: '#f472b6', padding: '8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold' }} 
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #ec4899', color: '#f472b6', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', boxSizing: 'border-box' }} 
                 />
-                <DollarSign size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#ec4899' }} />
+                <DollarSign size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#ec4899' }} />
               </div>
             </div>
 
@@ -426,8 +426,9 @@ export default function NewConnection() {
                   placeholder="پیکج منتخب کرنے پر آٹو آئے گی"
                   value={formData.monthlyPrice} 
                   onChange={handleChange}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #10b981', color: '#34d399', padding: '8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold' }} 
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #10b981', color: '#34d399', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', boxSizing: 'border-box' }} 
                 />
+                <DollarSign size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#10b981' }} />
               </div>
             </div>
 
@@ -443,9 +444,9 @@ export default function NewConnection() {
                   placeholder="user@gmail.com"
                   value={formData.email} 
                   onChange={handleChange}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }} 
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', boxSizing: 'border-box', direction: 'ltr', textAlign: 'right' }} 
                 />
-                <Mail size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+                <Mail size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
@@ -461,9 +462,9 @@ export default function NewConnection() {
                   placeholder="35202-0000000-0"
                   value={formData.cnic} 
                   onChange={handleChange}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }} 
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', boxSizing: 'border-box', direction: 'ltr', textAlign: 'right' }} 
                 />
-                <CreditCard size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+                <CreditCard size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
@@ -479,15 +480,15 @@ export default function NewConnection() {
                   placeholder="پتہ درج کریں..."
                   value={formData.address} 
                   onChange={handleChange}
-                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px', fontFamily: 'inherit' }} 
+                  style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#ffffff', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', fontFamily: 'inherit', boxSizing: 'border-box' }} 
                 />
-                <MapPin size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#64748b' }} />
+                <MapPin size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b' }} />
               </div>
             </div>
 
           </div>
 
-          {/* PPPoE اکاؤنٹ کریڈینشلز */}
+          {/* PPPoE کریڈینشلز */}
           <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px dashed #334155' }}>
             <h3 style={{ fontSize: '13px', fontWeight: 'bold', color: '#38bdf8', marginBottom: '10px' }}>
               🔒 PPPoE اکاؤنٹ کریڈینشلز
@@ -507,9 +508,9 @@ export default function NewConnection() {
                     placeholder="ali123"
                     value={formData.pppoeUsername} 
                     onChange={handleChange}
-                    style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #06b6d4', color: '#38bdf8', padding: '8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', direction: 'ltr' }} 
+                    style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #06b6d4', color: '#38bdf8', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', direction: 'ltr', boxSizing: 'border-box' }} 
                   />
-                  <KeyRound size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#06b6d4' }} />
+                  <KeyRound size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#06b6d4' }} />
                 </div>
               </div>
 
@@ -525,16 +526,16 @@ export default function NewConnection() {
                     placeholder="پاسورڈ درج کریں"
                     value={formData.pppoePassword} 
                     onChange={handleChange}
-                    style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #06b6d4', color: '#38bdf8', padding: '8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', direction: 'ltr' }} 
+                    style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #06b6d4', color: '#38bdf8', padding: '8px 30px 8px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', direction: 'ltr', boxSizing: 'border-box' }} 
                   />
-                  <Lock size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#06b6d4' }} />
+                  <Lock size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#06b6d4' }} />
                 </div>
               </div>
 
             </div>
           </div>
 
-          {/* بٹنز */}
+          {/* ایکشن بٹنز */}
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
             <button 
               type="button" 
