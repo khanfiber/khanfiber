@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Layout from '../../components/Layout';
 import { supabase } from '../../lib/supabaseClient';
 import { openWhatsAppDirect } from '../../lib/whatsapp';
@@ -23,576 +23,651 @@ import {
   Package
 } from 'lucide-react';
 
+/* =========================
+   TYPES
+========================= */
+
 interface PackageType {
   id: number;
-  package_name: string;
+  name: string;
   speed: string;
   price: number;
 }
 
+interface FormDataType {
+  serialNumber: string;
+  fullName: string;
+  fatherName: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  cnic: string;
+  address: string;
+  pppoeUsername: string;
+  pppoePassword: string;
+  monthlyPrice: string;
+  connectionCharges: string;
+  packageId: string;
+  packageName: string;
+  speed: string;
+}
+
+/* =========================
+   DEFAULT FORM
+========================= */
+
+const initialFormData: FormDataType = {
+  serialNumber: 'HFN0001',
+  fullName: '',
+  fatherName: '',
+  phone: '',
+  whatsapp: '',
+  email: '',
+  cnic: '',
+  address: '',
+  pppoeUsername: '',
+  pppoePassword: '',
+  monthlyPrice: '',
+  connectionCharges: '',
+  packageId: '',
+  packageName: '',
+  speed: ''
+};
+
 export default function NewConnection() {
+  const [formData, setFormData] =
+    useState<FormDataType>(initialFormData);
 
-  const [formData, setFormData] = useState({
-    serialNumber: 'HFN0001',
-    fullName: '',
-    fatherName: '',
-    phone: '',
-    whatsapp: '',
-    email: '',
-    cnic: '',
-    address: '',
-    pppoeUsername: '',
-    pppoePassword: '',
-    monthlyPrice: '',
-    connectionCharges: '',
-    packageName: '',
-    speed: ''
-  });
+  const [packagesList, setPackagesList] =
+    useState<PackageType[]>([]);
 
-  const [packagesList, setPackagesList] = useState<PackageType[]>([]);
-  const [selectedPackageId, setSelectedPackageId] = useState('');
   const [loading, setLoading] = useState(false);
-  const [initializing, setInitializing] = useState(true);
+  const [packagesLoading, setPackagesLoading] = useState(true);
+
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // =====================================================
-  // INITIAL DATA
-  // Serial Number + Packages
-  // =====================================================
+  /* =========================================================
+     LOAD SERIAL NUMBER + PACKAGES
+  ========================================================= */
 
-  useEffect(() => {
+  const loadInitialData = async () => {
+    setPackagesLoading(true);
 
-    const initData = async () => {
+    try {
+      /* =========================
+         1. NEXT SERIAL NUMBER
+         HFN0001, HFN0002...
+      ========================= */
 
-      setInitializing(true);
+      const { data: customerData, error: customerError } =
+        await supabase
+          .from('customers')
+          .select('serial_number')
+          .like('serial_number', 'HFN%');
 
-      try {
-
-        // -----------------------------------------------
-        // Last HFN serial number حاصل کریں
-        // -----------------------------------------------
-
-        const { data: customerData, error: customerError } =
-          await supabase
-            .from('customers')
-            .select('serial_number')
-            .like('serial_number', 'HFN%');
-
-        if (customerError) {
-          console.error(
-            'Serial Fetch Error:',
-            customerError
-          );
-        }
-
-        let highestNumber = 0;
-
-        if (customerData && customerData.length > 0) {
-
-          customerData.forEach((customer) => {
-
-            const serial =
-              String(customer.serial_number || '');
-
-            const match =
-              serial.match(/^HFN(\d+)$/i);
-
-            if (match) {
-
-              const number =
-                parseInt(match[1], 10);
-
-              if (
-                !Number.isNaN(number) &&
-                number > highestNumber
-              ) {
-                highestNumber = number;
-              }
-
-            }
-
-          });
-
-        }
-
-        const nextNumber = highestNumber + 1;
-
-        const formattedSerial =
-          `HFN${String(nextNumber).padStart(4, '0')}`;
-
-        setFormData(prev => ({
-          ...prev,
-          serialNumber: formattedSerial
-        }));
-
-
-        // -----------------------------------------------
-        // Packages from Supabase
-        // -----------------------------------------------
-
-        const {
-          data: pkgData,
-          error: packageError
-        } = await supabase
-          .from('packages')
-          .select('id, package_name, speed, price')
-          .order('price', {
-            ascending: true
-          });
-
-        if (packageError) {
-
-          console.error(
-            'Packages Fetch Error:',
-            packageError
-          );
-
-          setErrorMessage(
-            `Packages Error: ${packageError.message}`
-          );
-
-        } else if (pkgData) {
-
-          setPackagesList(
-            pkgData as PackageType[]
-          );
-
-        }
-
-      } catch (err: any) {
-
+      if (customerError) {
         console.error(
-          'Initialization Error:',
-          err
+          'Serial Number Error:',
+          customerError.message
+        );
+      }
+
+      let highestNumber = 0;
+
+      if (customerData && customerData.length > 0) {
+        customerData.forEach((customer: any) => {
+          const serial = String(
+            customer.serial_number || ''
+          ).toUpperCase();
+
+          const match = serial.match(/^HFN(\d+)$/);
+
+          if (match) {
+            const number = parseInt(match[1], 10);
+
+            if (number > highestNumber) {
+              highestNumber = number;
+            }
+          }
+        });
+      }
+
+      const nextNumber = highestNumber + 1;
+
+      const nextSerial =
+        `HFN${String(nextNumber).padStart(4, '0')}`;
+
+      setFormData(prev => ({
+        ...prev,
+        serialNumber: nextSerial
+      }));
+
+      /* =========================
+         2. LOAD PACKAGES
+
+         Supabase packages columns:
+         id
+         name
+         speed
+         price
+      ========================= */
+
+      const { data: pkgData, error: pkgError } =
+        await supabase
+          .from('packages')
+          .select('id, name, speed, price')
+          .order('price', { ascending: true });
+
+      if (pkgError) {
+        console.error(
+          'Packages Error:',
+          pkgError.message
         );
 
         setErrorMessage(
-          `Initialization Error: ${
-            err?.message ||
-            'ڈیٹا لوڈ نہیں ہو سکا'
-          }`
+          `Packages Error: ${pkgError.message}`
         );
 
-      } finally {
+        setPackagesList([]);
+      } else {
+        const cleanPackages: PackageType[] =
+          (pkgData || []).map((pkg: any) => ({
+            id: Number(pkg.id),
+            name: String(pkg.name || ''),
+            speed: String(pkg.speed || ''),
+            price: Number(pkg.price || 0)
+          }));
 
-        setInitializing(false);
-
+        setPackagesList(cleanPackages);
       }
+    } catch (err: any) {
+      console.error('Initialization Error:', err);
 
-    };
-
-    initData();
-
-  }, [isSubmitted]);
-
-
-  // =====================================================
-  // PACKAGE SELECT
-  // Auto Fill:
-  // Package Name
-  // Speed
-  // Monthly Price
-  // =====================================================
-
-  const handlePackageSelect = (
-    e: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-
-    const packageId = e.target.value;
-
-    setSelectedPackageId(packageId);
-
-    if (!packageId) {
-
-      setFormData(prev => ({
-        ...prev,
-        packageName: '',
-        speed: '',
-        monthlyPrice: ''
-      }));
-
-      return;
-
-    }
-
-    const selectedPackage =
-      packagesList.find(
-        pkg =>
-          String(pkg.id) === packageId
+      setErrorMessage(
+        err?.message ||
+          'ابتدائی ڈیٹا لوڈ کرنے میں خرابی پیش آئی۔'
       );
-
-    if (selectedPackage) {
-
-      setFormData(prev => ({
-        ...prev,
-
-        packageName:
-          selectedPackage.package_name || '',
-
-        speed:
-          selectedPackage.speed || '',
-
-        monthlyPrice:
-          String(
-            selectedPackage.price ?? ''
-          )
-      }));
-
+    } finally {
+      setPackagesLoading(false);
     }
-
   };
 
+  useEffect(() => {
+    loadInitialData();
+  }, []);
 
-  // =====================================================
-  // NORMAL INPUT CHANGE
-  // =====================================================
+  /* =========================================================
+     NORMAL INPUT CHANGE
+  ========================================================= */
 
   const handleChange = (
-    e:
-      React.ChangeEvent<HTMLInputElement> |
-      React.ChangeEvent<HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement
+    >
   ) => {
-
     const { name, value } = e.target;
 
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-
   };
 
+  /* =========================================================
+     PACKAGE SELECT
 
-  // =====================================================
-  // SAVE CUSTOMER
-  // =====================================================
+     packages.name  -> customers.package_name
+     packages.speed -> customers.speed
+     packages.price -> customers.monthly_price
+  ========================================================= */
+
+  const handlePackageSelect = (
+    e: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const selectedPackageId = e.target.value;
+
+    if (!selectedPackageId) {
+      setFormData(prev => ({
+        ...prev,
+        packageId: '',
+        packageName: '',
+        speed: '',
+        monthlyPrice: ''
+      }));
+
+      return;
+    }
+
+    const selectedPackage = packagesList.find(
+      pkg => String(pkg.id) === selectedPackageId
+    );
+
+    if (!selectedPackage) {
+      setErrorMessage(
+        'منتخب کیا گیا پیکیج نہیں ملا۔'
+      );
+
+      return;
+    }
+
+    setErrorMessage('');
+
+    setFormData(prev => ({
+      ...prev,
+
+      packageId: String(selectedPackage.id),
+
+      // packages.name
+      packageName: selectedPackage.name,
+
+      // packages.speed
+      speed: selectedPackage.speed,
+
+      // packages.price
+      monthlyPrice: String(selectedPackage.price)
+    }));
+  };
+
+  /* =========================================================
+     SUBMIT NEW CONNECTION
+  ========================================================= */
 
   const handleSubmit = async (
     e: React.FormEvent
   ) => {
-
     e.preventDefault();
+
+    if (loading) return;
 
     setLoading(true);
     setErrorMessage('');
     setIsSubmitted(false);
 
     try {
+      /* =========================
+         VALIDATIONS
+      ========================= */
 
-      // Package validation
+      if (!formData.fullName.trim()) {
+        throw new Error(
+          'صارف کا نام درج کریں۔'
+        );
+      }
+
+      if (!formData.phone.trim()) {
+        throw new Error(
+          'فون نمبر درج کریں۔'
+        );
+      }
+
+      if (!formData.packageId) {
+        throw new Error(
+          'انٹرنیٹ پیکیج منتخب کریں۔'
+        );
+      }
 
       if (!formData.packageName) {
-
-        setErrorMessage(
-          'براہ کرم انٹرنیٹ پیکیج منتخب کریں۔'
+        throw new Error(
+          'پیکیج کا نام موجود نہیں۔'
         );
-
-        setLoading(false);
-
-        return;
-
       }
 
-
-      // -----------------------------------------------
-      // Customer Save in Supabase
-      // -----------------------------------------------
-
-      const { error } = await supabase
-        .from('customers')
-        .insert([
-          {
-            serial_number:
-              formData.serialNumber,
-
-            full_name:
-              formData.fullName,
-
-            father_name:
-              formData.fatherName,
-
-            phone:
-              formData.phone,
-
-            whatsapp:
-              formData.whatsapp,
-
-            email:
-              formData.email,
-
-            cnic:
-              formData.cnic,
-
-            address:
-              formData.address,
-
-            pppoe_username:
-              formData.pppoeUsername,
-
-            pppoe_password:
-              formData.pppoePassword,
-
-            monthly_price:
-              formData.monthlyPrice
-                ? parseFloat(
-                    formData.monthlyPrice
-                  )
-                : 0,
-
-            connection_charges:
-              formData.connectionCharges
-                ? parseFloat(
-                    formData.connectionCharges
-                  )
-                : 0,
-
-            package_name:
-              formData.packageName,
-
-            speed:
-              formData.speed,
-
-            password: '12345'
-          }
-        ]);
-
-
-      if (error) {
-
-        setErrorMessage(
-          `Supabase Error: ${error.message}`
+      if (!formData.speed) {
+        throw new Error(
+          'پیکیج کی سپیڈ موجود نہیں۔'
         );
-
-        return;
-
       }
 
-
-      // =================================================
-      // WHATSAPP MESSAGE
-      // =================================================
-
-      const targetPhone =
-        formData.whatsapp ||
-        formData.phone;
-
-
-      if (targetPhone) {
-
-        const welcomeMessage =
-
-          `🎉 *One Click | Haider Fiber Network* 🎉\n\n` +
-
-          `محترم *${formData.fullName || 'صارف'}*!\n\n` +
-
-          `One Click - Haider Fiber Network میں خوش آمدید۔ آپ کا نیا انٹرنیٹ کنکشن کامیابی سے رجسٹر کر دیا گیا ہے۔\n\n` +
-
-          `━━━━━━━━━━━━━━━━━━\n` +
-          `📋 *کنکشن کی تفصیلات*\n` +
-          `━━━━━━━━━━━━━━━━━━\n\n` +
-
-          `🆔 *Customer ID:* ${formData.serialNumber}\n` +
-          `📦 *پیکیج:* ${formData.packageName || 'Standard'}\n` +
-          `⚡ *انٹرنیٹ سپیڈ:* ${formData.speed || 'N/A'}\n` +
-          `💳 *کنکشن چارجز:* Rs ${formData.connectionCharges || '0'}\n` +
-          `💰 *ماہانہ بل:* Rs ${formData.monthlyPrice || '0'}\n\n` +
-
-          `━━━━━━━━━━━━━━━━━━\n` +
-          `🌐 *PPPoE / Router Login*\n` +
-          `━━━━━━━━━━━━━━━━━━\n\n` +
-
-          `👤 *Username:* ${formData.pppoeUsername}\n` +
-          `🔐 *Password:* ${formData.pppoePassword}\n\n` +
-
-          `━━━━━━━━━━━━━━━━━━\n` +
-          `📱 *One Click Customer Portal*\n` +
-          `━━━━━━━━━━━━━━━━━━\n\n` +
-
-          `اپنا بل، ادائیگی، شکایت اور اکاؤنٹ کی تفصیلات دیکھنے کے لیے One Click پورٹل استعمال کریں:\n\n` +
-
-          `👉 https://khanfiber.vercel.app\n\n` +
-
-          `🔑 *Portal Login Details*\n\n` +
-
-          `👤 *Customer ID:* ${formData.serialNumber}\n` +
-          `🔒 *Default Password:* 12345\n\n` +
-
-          `⚠️ پہلی مرتبہ لاگ اِن کرنے کے بعد اپنا پاسورڈ تبدیل کر لیں۔\n\n` +
-
-          `کسی بھی مسئلے یا مزید معلومات کے لیے ہم سے رابطہ کریں۔\n\n` +
-
-          `شکریہ!\n` +
-          `*One Click*\n` +
-          `*Haider Fiber Network*`;
-
-
-        openWhatsAppDirect(
-          targetPhone,
-          welcomeMessage
+      if (!formData.monthlyPrice) {
+        throw new Error(
+          'ماہانہ چارجز موجود نہیں۔'
         );
-
       }
 
+      if (!formData.pppoeUsername.trim()) {
+        throw new Error(
+          'PPPoE یوزر نیم درج کریں۔'
+        );
+      }
 
-      // Success
+      if (!formData.pppoePassword.trim()) {
+        throw new Error(
+          'PPPoE پاسورڈ درج کریں۔'
+        );
+      }
+
+      /* =========================
+         CHECK SERIAL DUPLICATE
+      ========================= */
+
+      const { data: existingSerial } =
+        await supabase
+          .from('customers')
+          .select('id')
+          .eq(
+            'serial_number',
+            formData.serialNumber
+          )
+          .maybeSingle();
+
+      if (existingSerial) {
+        throw new Error(
+          'یہ سیریل نمبر پہلے سے موجود ہے۔ صفحہ Refresh کر کے دوبارہ کوشش کریں۔'
+        );
+      }
+
+      /* =========================
+         INSERT CUSTOMER
+      ========================= */
+
+      const { error: insertError } =
+        await supabase
+          .from('customers')
+          .insert([
+            {
+              serial_number:
+                formData.serialNumber,
+
+              full_name:
+                formData.fullName.trim(),
+
+              father_name:
+                formData.fatherName.trim(),
+
+              phone:
+                formData.phone.trim(),
+
+              whatsapp:
+                formData.whatsapp.trim(),
+
+              email:
+                formData.email.trim() || null,
+
+              cnic:
+                formData.cnic.trim(),
+
+              address:
+                formData.address.trim(),
+
+              pppoe_username:
+                formData.pppoeUsername.trim(),
+
+              pppoe_password:
+                formData.pppoePassword.trim(),
+
+              monthly_price:
+                Number(formData.monthlyPrice) || 0,
+
+              connection_charges:
+                Number(formData.connectionCharges) || 0,
+
+              /*
+               packages.name
+               customers.package_name
+              */
+              package_name:
+                formData.packageName,
+
+              /*
+               packages.speed
+               customers.speed
+              */
+              speed:
+                formData.speed,
+
+              /*
+               Default Customer Portal Password
+              */
+              password: '12345'
+            }
+          ]);
+
+      if (insertError) {
+        throw new Error(
+          `Supabase Error: ${insertError.message}`
+        );
+      }
+
+      /* =========================
+         SUCCESS
+      ========================= */
 
       setIsSubmitted(true);
 
+      /* =========================
+         WHATSAPP MESSAGE
+      ========================= */
 
-      // -----------------------------------------------
-      // Reset Form
-      // -----------------------------------------------
+      const targetPhone =
+        formData.whatsapp.trim() ||
+        formData.phone.trim();
 
-      setSelectedPackageId('');
+      if (targetPhone) {
+        const welcomeMessage =
+`🌐 *ONE CLICK - HAIDER FIBER NETWORK* 🌐
 
-      setFormData({
-        serialNumber: 'HFN0001',
-        fullName: '',
-        fatherName: '',
-        phone: '',
-        whatsapp: '',
-        email: '',
-        cnic: '',
-        address: '',
-        pppoeUsername: '',
-        pppoePassword: '',
-        monthlyPrice: '',
-        connectionCharges: '',
-        packageName: '',
-        speed: ''
-      });
+🎉 *نیا انٹرنیٹ کنکشن مبارک!* 🎉
 
+محترم *${formData.fullName || 'صارف'}*!
+
+*One Click - Haider Fiber Network* میں خوش آمدید۔
+
+آپ کا نیا انٹرنیٹ کنکشن کامیابی سے رجسٹر کر دیا گیا ہے۔
+
+━━━━━━━━━━━━━━
+📋 *کنکشن کی تفصیلات*
+━━━━━━━━━━━━━━
+
+🆔 *کسٹمر ID:* ${formData.serialNumber}
+
+👤 *نام:* ${formData.fullName}
+
+📦 *پیکیج:* ${formData.packageName}
+
+⚡ *انٹرنیٹ سپیڈ:* ${formData.speed}
+
+💰 *ماہانہ چارجز:* Rs ${Number(
+          formData.monthlyPrice
+        ).toLocaleString()}
+
+🔧 *کنکشن چارجز:* Rs ${Number(
+          formData.connectionCharges || 0
+        ).toLocaleString()}
+
+━━━━━━━━━━━━━━
+🔐 *PPPoE Login*
+━━━━━━━━━━━━━━
+
+👤 *PPPoE Username:* ${formData.pppoeUsername}
+
+🔑 *PPPoE Password:* ${formData.pppoePassword}
+
+━━━━━━━━━━━━━━
+📱 *Customer Portal*
+━━━━━━━━━━━━━━
+
+🌐 https://khanfiber.vercel.app
+
+🆔 *Customer ID:* ${formData.serialNumber}
+
+🔒 *Default Password:* 12345
+
+⚠️ سیکیورٹی کے لیے پورٹل میں لاگ اِن ہونے کے بعد اپنا پاسورڈ تبدیل کر لیں۔
+
+━━━━━━━━━━━━━━
+
+شکریہ ❤️
+
+*One Click*
+*Haider Fiber Network (SMC-Private) Limited*
+Your Network Solution`;
+
+        try {
+          openWhatsAppDirect(
+            targetPhone,
+            welcomeMessage
+          );
+        } catch (whatsappError) {
+          console.error(
+            'WhatsApp Error:',
+            whatsappError
+          );
+        }
+      }
+
+      /* =========================
+         RESET FORM
+      ========================= */
+
+      setFormData(prev => ({
+        ...initialFormData,
+        serialNumber: prev.serialNumber
+      }));
+
+      /*
+       Generate next serial again
+      */
+      setTimeout(() => {
+        loadInitialData();
+      }, 500);
 
     } catch (err: any) {
-
-      setErrorMessage(
-        `Error: ${
-          err?.message ||
-          'غیر متوقع خرابی پیش آئی'
-        }`
+      console.error(
+        'New Connection Error:',
+        err
       );
 
+      setErrorMessage(
+        err?.message ||
+          'غیر متوقع خرابی پیش آئی۔'
+      );
     } finally {
-
       setLoading(false);
-
     }
-
   };
 
-
-  // =====================================================
-  // RESET
-  // =====================================================
+  /* =========================================================
+     RESET
+  ========================================================= */
 
   const handleReset = () => {
-
-    setSelectedPackageId('');
-
     setFormData(prev => ({
-      ...prev,
-
-      fullName: '',
-      fatherName: '',
-      phone: '',
-      whatsapp: '',
-      email: '',
-      cnic: '',
-      address: '',
-      pppoeUsername: '',
-      pppoePassword: '',
-      monthlyPrice: '',
-      connectionCharges: '',
-      packageName: '',
-      speed: ''
+      ...initialFormData,
+      serialNumber: prev.serialNumber
     }));
 
     setErrorMessage('');
     setIsSubmitted(false);
-
   };
 
+  /* =========================================================
+     COMMON STYLES
+  ========================================================= */
 
-  // =====================================================
-  // UI
-  // =====================================================
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    background:
+      'linear-gradient(135deg, #071525 0%, #091b2d 100%)',
+    border: '1px solid #1e4663',
+    color: '#ffffff',
+    padding: '12px 40px 12px 12px',
+    borderRadius: '12px',
+    fontSize: '13px',
+    boxSizing: 'border-box',
+    outline: 'none'
+  };
+
+  const autoInputStyle: React.CSSProperties = {
+    ...inputStyle,
+    border: '1px solid #0891b2',
+    color: '#67e8f9',
+    fontWeight: '700',
+    background:
+      'linear-gradient(135deg, #071b2a 0%, #082336 100%)'
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: 'block',
+    fontSize: '12px',
+    fontWeight: '700',
+    color: '#e2e8f0',
+    marginBottom: '6px'
+  };
+
+  const iconStyle: React.CSSProperties = {
+    position: 'absolute',
+    right: '13px',
+    top: '13px',
+    color: '#64748b'
+  };
+
+  /* =========================================================
+     UI
+  ========================================================= */
 
   return (
-
     <Layout showNavButtons={true}>
-
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: '12px',
-          width: '100%'
+          gap: '16px',
+          width: '100%',
+          maxWidth: '1200px',
+          margin: '0 auto'
         }}
       >
 
-
-        {/* ==========================================
+        {/* =========================
             PAGE HEADER
-        ========================================== */}
+        ========================= */}
 
         <div
           style={{
+            background:
+              'linear-gradient(135deg, #081a2c 0%, #0b2035 55%, #09283a 100%)',
+            border: '1px solid #164e63',
+            borderRadius: '18px',
+            padding: '18px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-
-            background:
-              'linear-gradient(135deg, #111f35, #0b1729)',
-
-            padding: '12px 15px',
-
-            borderRadius: '14px',
-
-            border:
-              '1px solid rgba(56,189,248,0.22)',
-
             boxShadow:
-              '0 8px 25px rgba(0,0,0,0.18)'
+              '0 10px 35px rgba(0,0,0,0.22)'
           }}
         >
-
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '10px'
+              gap: '12px'
             }}
           >
-
             <div
               style={{
-                backgroundColor:
-                  'rgba(6,182,212,0.12)',
-
+                width: '52px',
+                height: '52px',
+                borderRadius: '15px',
+                background:
+                  'linear-gradient(135deg, rgba(6,182,212,.25), rgba(14,116,144,.15))',
                 border:
-                  '1px solid rgba(34,211,238,0.15)',
-
-                padding: '8px',
-
-                borderRadius: '10px',
-
-                color: '#22d3ee'
+                  '1px solid rgba(34,211,238,.25)',
+                color: '#22d3ee',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
             >
-              <UserPlus size={20} />
+              <UserPlus size={26} />
             </div>
 
             <div>
-
               <h2
                 style={{
                   margin: 0,
-
-                  fontSize: '15px',
-
-                  fontWeight: '900',
-
+                  fontSize: '20px',
+                  fontWeight: '800',
                   color: '#f8fafc'
                 }}
               >
@@ -601,181 +676,137 @@ export default function NewConnection() {
 
               <p
                 style={{
-                  margin: '3px 0 0',
-
-                  fontSize: '9px',
-
-                  color: '#64748b'
+                  margin: '4px 0 0',
+                  color: '#64748b',
+                  fontSize: '11px',
+                  direction: 'ltr'
                 }}
               >
                 One Click • Haider Fiber Network
               </p>
-
             </div>
-
           </div>
-
         </div>
 
-
-        {/* ==========================================
+        {/* =========================
             SUCCESS
-        ========================================== */}
+        ========================= */}
 
         {isSubmitted && (
-
           <div
             style={{
-              backgroundColor:
+              background:
                 'rgba(16,185,129,0.10)',
-
               border:
-                '1px solid rgba(16,185,129,0.35)',
-
+                '1px solid rgba(16,185,129,0.50)',
               color: '#34d399',
-
-              padding: '11px 14px',
-
-              borderRadius: '11px',
-
-              fontSize: '11px',
-
+              padding: '13px 15px',
+              borderRadius: '12px',
+              fontSize: '12px',
               display: 'flex',
-
               alignItems: 'center',
-
               gap: '8px'
             }}
           >
+            <CheckCircle2 size={18} />
 
-            <CheckCircle2 size={17} />
-
-            نیا کنکشن کامیابی سے محفوظ ہو گیا اور واٹس ایپ ونڈو کھول دی گئی ہے۔
-
+            نیا کنکشن کامیابی سے محفوظ ہو گیا ہے۔
           </div>
-
         )}
 
-
-        {/* ==========================================
+        {/* =========================
             ERROR
-        ========================================== */}
+        ========================= */}
 
         {errorMessage && (
-
           <div
             style={{
-              backgroundColor:
-                'rgba(239,68,68,0.10)',
-
+              background:
+                'rgba(244,63,94,0.10)',
               border:
-                '1px solid rgba(239,68,68,0.35)',
-
+                '1px solid rgba(244,63,94,0.45)',
               color: '#fb7185',
-
-              padding: '11px 14px',
-
-              borderRadius: '11px',
-
-              fontSize: '11px',
-
+              padding: '13px 15px',
+              borderRadius: '12px',
+              fontSize: '12px',
               display: 'flex',
-
               alignItems: 'center',
-
               gap: '8px'
             }}
           >
-
-            <AlertCircle size={17} />
+            <AlertCircle size={18} />
 
             {errorMessage}
-
           </div>
-
         )}
 
-
-        {/* ==========================================
+        {/* =========================
             FORM
-        ========================================== */}
+        ========================= */}
 
         <form
           onSubmit={handleSubmit}
           style={{
             background:
-              'linear-gradient(145deg, #0e1e34, #09182b)',
-
-            borderRadius: '16px',
-
-            padding: '16px',
-
-            border:
-              '1px solid rgba(148,163,184,0.12)',
-
+              'linear-gradient(145deg, #0b1b2e 0%, #0b2034 100%)',
+            borderRadius: '20px',
+            padding: '20px',
+            border: '1px solid #183a55',
             boxShadow:
-              '0 12px 35px rgba(0,0,0,0.16)'
+              '0 15px 40px rgba(0,0,0,.20)'
           }}
         >
-
 
           <div
             style={{
               display: 'grid',
-
               gridTemplateColumns:
-                'repeat(auto-fit, minmax(220px, 1fr))',
-
-              gap: '12px'
+                'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '16px'
             }}
           >
 
-
-            {/* SERIAL NUMBER */}
+            {/* SERIAL */}
 
             <div>
-
-              <label style={labelStyleBlue}>
+              <label
+                style={{
+                  ...labelStyle,
+                  color: '#67e8f9'
+                }}
+              >
                 کسٹمر ID / سیریل نمبر
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <input
-                  type="text"
-                  name="serialNumber"
-                  value={
-                    initializing
-                      ? 'Loading...'
-                      : formData.serialNumber
-                  }
+                  value={formData.serialNumber}
                   readOnly
                   style={{
-                    ...inputStyle,
-                    color: '#38bdf8',
-                    fontWeight: 'bold',
-                    border:
-                      '1px solid rgba(56,189,248,0.45)'
+                    ...autoInputStyle,
+                    direction: 'ltr',
+                    textAlign: 'right'
                   }}
                 />
 
-                <Hash style={iconStyle} size={14} />
-
+                <Hash
+                  size={17}
+                  style={{
+                    ...iconStyle,
+                    color: '#22d3ee'
+                  }}
+                />
               </div>
-
             </div>
-
 
             {/* FULL NAME */}
 
             <div>
-
               <label style={labelStyle}>
                 صارف کا نام (Full Name) *
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   name="fullName"
@@ -786,23 +817,21 @@ export default function NewConnection() {
                   style={inputStyle}
                 />
 
-                <User style={iconStyle} size={14} />
-
+                <User
+                  size={17}
+                  style={iconStyle}
+                />
               </div>
-
             </div>
-
 
             {/* FATHER */}
 
             <div>
-
               <label style={labelStyle}>
                 ولدیت (Father Name)
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   name="fatherName"
@@ -812,23 +841,21 @@ export default function NewConnection() {
                   style={inputStyle}
                 />
 
-                <User style={iconStyle} size={14} />
-
+                <User
+                  size={17}
+                  style={iconStyle}
+                />
               </div>
-
             </div>
-
 
             {/* PHONE */}
 
             <div>
-
               <label style={labelStyle}>
                 فون نمبر (Mobile Number) *
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   name="phone"
@@ -843,23 +870,21 @@ export default function NewConnection() {
                   }}
                 />
 
-                <Phone style={iconStyle} size={14} />
-
+                <Phone
+                  size={17}
+                  style={iconStyle}
+                />
               </div>
-
             </div>
-
 
             {/* WHATSAPP */}
 
             <div>
-
               <label style={labelStyle}>
                 واٹس ایپ نمبر (WhatsApp)
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   name="whatsapp"
@@ -874,233 +899,212 @@ export default function NewConnection() {
                 />
 
                 <MessageSquare
+                  size={17}
                   style={iconStyle}
-                  size={14}
                 />
-
               </div>
-
             </div>
 
-
-            {/* ======================================
-                PACKAGE SELECT
-            ====================================== */}
+            {/* PACKAGE SELECT */}
 
             <div>
-
-              <label style={labelStyleBlue}>
+              <label
+                style={{
+                  ...labelStyle,
+                  color: '#67e8f9'
+                }}
+              >
                 انٹرنیٹ پیکیج (Select Package) *
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <select
                   required
-                  value={selectedPackageId}
+                  value={formData.packageId}
                   onChange={handlePackageSelect}
-                  disabled={initializing}
+                  disabled={packagesLoading}
                   style={{
-                    ...inputStyle,
-
-                    paddingRight: '32px',
-
-                    border:
-                      '1px solid rgba(56,189,248,0.45)',
-
+                    ...autoInputStyle,
+                    appearance: 'none',
                     cursor: 'pointer'
                   }}
                 >
-
                   <option value="">
-                    {initializing
+                    {packagesLoading
                       ? 'پیکیجز لوڈ ہو رہے ہیں...'
                       : 'پیکیج منتخب کریں...'}
                   </option>
 
                   {packagesList.map(pkg => (
-
                     <option
                       key={pkg.id}
                       value={String(pkg.id)}
                     >
-                      {pkg.package_name}
-                      {' '}
-                      ({pkg.speed})
-                      {' '}
-                      - Rs {pkg.price}
+                      {pkg.name} - {pkg.speed} - Rs{' '}
+                      {Number(
+                        pkg.price
+                      ).toLocaleString()}
                     </option>
-
                   ))}
-
                 </select>
 
                 <Package
-                  style={iconStyleBlue}
-                  size={14}
+                  size={17}
+                  style={{
+                    ...iconStyle,
+                    color: '#22d3ee',
+                    pointerEvents: 'none'
+                  }}
                 />
-
               </div>
-
             </div>
-
 
             {/* PACKAGE NAME AUTO */}
 
             <div>
-
-              <label style={labelStyleBlue}>
+              <label
+                style={{
+                  ...labelStyle,
+                  color: '#67e8f9'
+                }}
+              >
                 پیکیج نام (Auto)
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   value={formData.packageName}
                   readOnly
                   placeholder="پیکیج کا نام"
-                  style={{
-                    ...inputStyle,
-
-                    color: '#67e8f9',
-
-                    border:
-                      '1px solid rgba(34,211,238,0.30)'
-                  }}
+                  style={autoInputStyle}
                 />
 
                 <Package
-                  style={iconStyleBlue}
-                  size={14}
+                  size={17}
+                  style={{
+                    ...iconStyle,
+                    color: '#22d3ee'
+                  }}
                 />
-
               </div>
-
             </div>
-
 
             {/* SPEED AUTO */}
 
             <div>
-
-              <label style={labelStyleBlue}>
+              <label
+                style={{
+                  ...labelStyle,
+                  color: '#67e8f9'
+                }}
+              >
                 انٹرنیٹ سپیڈ (Auto)
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   value={formData.speed}
                   readOnly
-                  placeholder="پیکیج منتخب کریں"
-                  style={{
-                    ...inputStyle,
-
-                    color: '#38bdf8',
-
-                    border:
-                      '1px solid rgba(56,189,248,0.30)'
-                  }}
+                  placeholder="پیکیج کی سپیڈ"
+                  style={autoInputStyle}
                 />
 
                 <Gauge
-                  style={iconStyleBlue}
-                  size={14}
+                  size={17}
+                  style={{
+                    ...iconStyle,
+                    color: '#22d3ee'
+                  }}
                 />
-
               </div>
-
             </div>
-
 
             {/* MONTHLY PRICE AUTO */}
 
             <div>
-
-              <label style={labelStyleGreen}>
+              <label
+                style={{
+                  ...labelStyle,
+                  color: '#34d399'
+                }}
+              >
                 ماہانہ چارجز (Auto)
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <input
                   type="number"
                   value={formData.monthlyPrice}
                   readOnly
-                  required
-                  placeholder="پیکیج منتخب کریں"
+                  placeholder="ماہانہ چارجز"
                   style={{
-                    ...inputStyle,
-
-                    color: '#34d399',
-
-                    fontWeight: 'bold',
-
+                    ...autoInputStyle,
                     border:
-                      '1px solid rgba(16,185,129,0.35)'
+                      '1px solid #059669',
+                    color: '#34d399'
                   }}
                 />
 
                 <DollarSign
-                  style={iconStyleGreen}
-                  size={14}
+                  size={17}
+                  style={{
+                    ...iconStyle,
+                    color: '#34d399'
+                  }}
                 />
-
               </div>
-
             </div>
-
 
             {/* CONNECTION CHARGES */}
 
             <div>
-
-              <label style={labelStylePink}>
-                کنکشن چارجز (Rs)
+              <label
+                style={{
+                  ...labelStyle,
+                  color: '#f472b6'
+                }}
+              >
+                کنکشن چارجز
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <input
                   type="number"
                   name="connectionCharges"
-                  placeholder="2000"
-                  value={formData.connectionCharges}
+                  min="0"
+                  placeholder="مثلاً 2000"
+                  value={
+                    formData.connectionCharges
+                  }
                   onChange={handleChange}
                   style={{
                     ...inputStyle,
-
-                    color: '#f472b6',
-
-                    fontWeight: 'bold',
-
                     border:
-                      '1px solid rgba(236,72,153,0.35)'
+                      '1px solid #9d174d',
+                    color: '#f9a8d4'
                   }}
                 />
 
                 <DollarSign
-                  style={iconStylePink}
-                  size={14}
+                  size={17}
+                  style={{
+                    ...iconStyle,
+                    color: '#f472b6'
+                  }}
                 />
-
               </div>
-
             </div>
-
 
             {/* EMAIL */}
 
             <div>
-
               <label style={labelStyle}>
                 ای میل (Email)
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <input
                   type="email"
                   name="email"
@@ -1114,23 +1118,21 @@ export default function NewConnection() {
                   }}
                 />
 
-                <Mail style={iconStyle} size={14} />
-
+                <Mail
+                  size={17}
+                  style={iconStyle}
+                />
               </div>
-
             </div>
-
 
             {/* CNIC */}
 
             <div>
-
               <label style={labelStyle}>
                 شناختی کارڈ (CNIC)
               </label>
 
-              <div style={inputWrapperStyle}>
-
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   name="cnic"
@@ -1145,188 +1147,145 @@ export default function NewConnection() {
                 />
 
                 <CreditCard
+                  size={17}
                   style={iconStyle}
-                  size={14}
                 />
-
               </div>
-
-            </div>
-
-
-            {/* ADDRESS */}
-
-            <div
-              style={{
-                gridColumn: '1 / -1'
-              }}
-            >
-
-              <label style={labelStyle}>
-                مکمل ایڈریس (Address)
-              </label>
-
-              <div style={inputWrapperStyle}>
-
-                <textarea
-                  name="address"
-                  rows={2}
-                  placeholder="صارف کا مکمل پتہ درج کریں..."
-                  value={formData.address}
-                  onChange={handleChange}
-                  style={{
-                    ...inputStyle,
-                    resize: 'vertical',
-                    fontFamily: 'inherit'
-                  }}
-                />
-
-                <MapPin
-                  style={{
-                    ...iconStyle,
-                    top: '11px'
-                  }}
-                  size={14}
-                />
-
-              </div>
-
             </div>
 
           </div>
 
+          {/* ADDRESS */}
 
-          {/* ==========================================
-              PPPoE
-          ========================================== */}
+          <div style={{ marginTop: '16px' }}>
+            <label style={labelStyle}>
+              مکمل ایڈریس (Address)
+            </label>
+
+            <div style={{ position: 'relative' }}>
+              <textarea
+                name="address"
+                rows={3}
+                placeholder="صارف کا مکمل پتہ درج کریں..."
+                value={formData.address}
+                onChange={handleChange}
+                style={{
+                  ...inputStyle,
+                  resize: 'vertical',
+                  fontFamily: 'inherit'
+                }}
+              />
+
+              <MapPin
+                size={17}
+                style={iconStyle}
+              />
+            </div>
+          </div>
+
+          {/* =========================
+              PPPOE SECTION
+          ========================= */}
 
           <div
             style={{
-              marginTop: '18px',
-
-              paddingTop: '15px',
-
+              marginTop: '22px',
+              paddingTop: '18px',
               borderTop:
-                '1px solid rgba(148,163,184,0.12)'
+                '1px solid #183a55'
             }}
           >
-
             <h3
               style={{
-                margin: '0 0 11px',
-
-                fontSize: '12px',
-
-                fontWeight: '900',
-
+                margin: '0 0 14px',
+                fontSize: '14px',
                 color: '#67e8f9'
               }}
             >
-              PPPoE اکاؤنٹ کریڈینشلز
+              🔐 PPPoE اکاؤنٹ تفصیلات
             </h3>
-
 
             <div
               style={{
                 display: 'grid',
-
                 gridTemplateColumns:
-                  'repeat(auto-fit, minmax(220px, 1fr))',
-
-                gap: '12px'
+                  'repeat(auto-fit, minmax(240px, 1fr))',
+                gap: '16px'
               }}
             >
 
-
-              {/* PPP USER */}
+              {/* PPPOE USER */}
 
               <div>
-
                 <label style={labelStyle}>
                   PPPoE یوزر نیم *
                 </label>
 
-                <div style={inputWrapperStyle}>
-
+                <div style={{ position: 'relative' }}>
                   <input
                     type="text"
                     name="pppoeUsername"
                     required
-                    placeholder="ali123"
-                    value={formData.pppoeUsername}
+                    placeholder="مثلاً ali123"
+                    value={
+                      formData.pppoeUsername
+                    }
                     onChange={handleChange}
                     style={{
-                      ...inputStyle,
-
-                      direction: 'ltr',
-
-                      color: '#38bdf8',
-
-                      fontWeight: 'bold',
-
-                      border:
-                        '1px solid rgba(6,182,212,0.35)'
+                      ...autoInputStyle,
+                      direction: 'ltr'
                     }}
                   />
 
                   <KeyRound
-                    style={iconStyleBlue}
-                    size={14}
+                    size={17}
+                    style={{
+                      ...iconStyle,
+                      color: '#22d3ee'
+                    }}
                   />
-
                 </div>
-
               </div>
 
-
-              {/* PPP PASSWORD */}
+              {/* PPPOE PASSWORD */}
 
               <div>
-
                 <label style={labelStyle}>
                   PPPoE پاسورڈ *
                 </label>
 
-                <div style={inputWrapperStyle}>
-
+                <div style={{ position: 'relative' }}>
                   <input
                     type="text"
                     name="pppoePassword"
                     required
-                    placeholder="پاسورڈ درج کریں"
-                    value={formData.pppoePassword}
+                    placeholder="PPPoE پاسورڈ"
+                    value={
+                      formData.pppoePassword
+                    }
                     onChange={handleChange}
                     style={{
-                      ...inputStyle,
-
-                      direction: 'ltr',
-
-                      color: '#38bdf8',
-
-                      fontWeight: 'bold',
-
-                      border:
-                        '1px solid rgba(6,182,212,0.35)'
+                      ...autoInputStyle,
+                      direction: 'ltr'
                     }}
                   />
 
                   <Lock
-                    style={iconStyleBlue}
-                    size={14}
+                    size={17}
+                    style={{
+                      ...iconStyle,
+                      color: '#22d3ee'
+                    }}
                   />
-
                 </div>
-
               </div>
 
             </div>
-
           </div>
 
-
-          {/* ==========================================
+          {/* =========================
               BUTTONS
-          ========================================== */}
+          ========================= */}
 
           <div
             style={{
@@ -1334,93 +1293,63 @@ export default function NewConnection() {
               flexWrap: 'wrap',
               gap: '10px',
               justifyContent: 'flex-end',
-              marginTop: '20px'
+              marginTop: '24px'
             }}
           >
-
             <button
               type="button"
               onClick={handleReset}
               disabled={loading}
               style={{
-                backgroundColor: '#1e293b',
-
+                background: '#1e293b',
                 color: '#cbd5e1',
-
-                padding: '9px 17px',
-
-                borderRadius: '9px',
-
-                fontSize: '11px',
-
-                fontWeight: 'bold',
-
-                border:
-                  '1px solid rgba(148,163,184,0.15)',
-
-                cursor: loading
-                  ? 'not-allowed'
-                  : 'pointer',
-
+                padding: '11px 18px',
+                borderRadius: '10px',
+                fontSize: '12px',
+                fontWeight: '700',
+                border: '1px solid #334155',
+                cursor: 'pointer',
                 display: 'flex',
-
                 alignItems: 'center',
-
-                gap: '6px'
+                gap: '7px'
               }}
             >
-
-              <RotateCcw size={14} />
+              <RotateCcw size={16} />
 
               ری سیٹ
-
             </button>
-
 
             <button
               type="submit"
-              disabled={loading || initializing}
+              disabled={
+                loading || packagesLoading
+              }
               style={{
                 background:
-                  'linear-gradient(135deg, #0891b2, #2563eb)',
-
+                  loading || packagesLoading
+                    ? '#155e75'
+                    : 'linear-gradient(135deg, #0891b2, #2563eb)',
                 color: '#ffffff',
-
-                padding: '9px 20px',
-
-                borderRadius: '9px',
-
-                fontSize: '11px',
-
-                fontWeight: 'bold',
-
+                padding: '11px 22px',
+                borderRadius: '10px',
+                fontSize: '12px',
+                fontWeight: '800',
                 border: 'none',
-
                 cursor:
-                  loading || initializing
+                  loading || packagesLoading
                     ? 'not-allowed'
                     : 'pointer',
-
                 display: 'flex',
-
                 alignItems: 'center',
-
-                gap: '6px',
-
-                opacity:
-                  loading || initializing
-                    ? 0.7
-                    : 1,
-
+                gap: '7px',
                 boxShadow:
-                  '0 8px 20px rgba(37,99,235,0.18)'
+                  '0 8px 25px rgba(8,145,178,.20)'
               }}
             >
-
               {loading ? (
                 <>
                   <Loader2
-                    size={14}
+                    size={16}
                     className="animate-spin"
                   />
 
@@ -1428,114 +1357,16 @@ export default function NewConnection() {
                 </>
               ) : (
                 <>
-                  <Save size={14} />
+                  <Save size={16} />
 
                   محفوظ کریں اور واٹس ایپ بھیجیں
                 </>
               )}
-
             </button>
-
           </div>
 
         </form>
-
       </div>
-
     </Layout>
-
   );
-
 }
-
-
-// =====================================================
-// REUSABLE INLINE STYLES
-// =====================================================
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: '10px',
-  fontWeight: '700',
-  color: '#cbd5e1',
-  marginBottom: '5px'
-};
-
-
-const labelStyleBlue: React.CSSProperties = {
-  ...labelStyle,
-  color: '#67e8f9'
-};
-
-
-const labelStyleGreen: React.CSSProperties = {
-  ...labelStyle,
-  color: '#34d399'
-};
-
-
-const labelStylePink: React.CSSProperties = {
-  ...labelStyle,
-  color: '#f472b6'
-};
-
-
-const inputWrapperStyle: React.CSSProperties = {
-  position: 'relative'
-};
-
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-
-  boxSizing: 'border-box',
-
-  backgroundColor: '#071426',
-
-  border:
-    '1px solid rgba(100,116,139,0.30)',
-
-  color: '#ffffff',
-
-  padding:
-    '9px 32px 9px 10px',
-
-  borderRadius: '9px',
-
-  fontSize: '11px',
-
-  outline: 'none'
-};
-
-
-const iconStyle: React.CSSProperties = {
-  position: 'absolute',
-
-  right: '10px',
-
-  top: '50%',
-
-  transform: 'translateY(-50%)',
-
-  color: '#64748b',
-
-  pointerEvents: 'none'
-};
-
-
-const iconStyleBlue: React.CSSProperties = {
-  ...iconStyle,
-  color: '#38bdf8'
-};
-
-
-const iconStyleGreen: React.CSSProperties = {
-  ...iconStyle,
-  color: '#10b981'
-};
-
-
-const iconStylePink: React.CSSProperties = {
-  ...iconStyle,
-  color: '#ec4899'
-};
