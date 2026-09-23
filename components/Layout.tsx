@@ -3,33 +3,22 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabaseClient';
 import { 
-  LogOut, 
-  KeyRound, 
-  CheckCircle2, 
-  X, 
-  User, 
-  ChevronDown, 
-  ShieldCheck,
-  ArrowRight
+  LogOut, KeyRound, CheckCircle2, X, User, ChevronDown, ArrowRight 
 } from 'lucide-react';
 
-export default function Layout({ children, showNavButtons = true }: { children: React.ReactNode; showNavButtons?: boolean }) {
+export default function Layout({ children, showNavButtons = true }: any) {
   const router = useRouter();
   const [showMenu, setShowMenu] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [msg, setMsg] = useState('');
   const [user, setUser] = useState<any>(null);
-
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    if (storedUser) setUser(JSON.parse(storedUser));
 
-    // باہر کلک کرنے پر ڈراپ ڈاؤن مینو بند کریں
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setShowMenu(false);
@@ -44,302 +33,157 @@ export default function Layout({ children, showNavButtons = true }: { children: 
     router.push('/');
   };
 
-  const handleChangePassword = async (e: React.FormEvent) => {
+  const handleChangePassword = async (e: any) => {
     e.preventDefault();
     if (!newPassword) return;
 
     if (user?.role === 'admin') {
       localStorage.setItem('admin_password', newPassword);
-      setMsg('ایڈمن پاسورڈ کامیابی سے تبدیل ہو گیا!');
-    } else if (user?.id) {
+      setMsg('ایڈمن پاسورڈ تبدیل ہو گیا!');
+    } else {
       const { error } = await supabase
         .from('customers')
         .update({ password: newPassword })
         .eq('id', user.id);
 
-      if (error) {
-        setMsg('خرابی: ' + error.message);
-      } else {
-        setMsg('پاسورڈ کامیابی سے اپ ڈیٹ ہو گیا!');
-      }
+      if (error) setMsg(error.message);
+      else setMsg('پاسورڈ اپڈیٹ ہو گیا!');
     }
 
     setTimeout(() => {
       setMsg('');
       setShowPasswordModal(false);
-      setShowMenu(false);
       setNewPassword('');
     }, 2000);
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      backgroundColor: '#0f172a', 
-      color: '#fff', 
-      direction: 'rtl', 
-      fontFamily: 'sans-serif',
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg,#020617,#0f172a,#020617)',
+      color: '#fff',
       display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between'
+      flexDirection: 'column'
     }}>
-      
-      {/* 1. ہیڈر بار */}
-      <header style={{ 
-        backgroundColor: '#1c2541', 
-        padding: '10px 16px', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        borderBottom: '1px solid #334155',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 50
-      }}>
-        
-        {/* بائیں طرف لوگو اور برانڈ نیم */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ 
-            width: '42px', 
-            height: '42px', 
-            borderRadius: '12px', 
-            backgroundColor: '#0f172a', 
-            border: '1.5px solid #38bdf8', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            overflow: 'hidden',
-            padding: '2px'
-          }}>
-            <img 
-              src="/logo.png" 
-              alt="Khan Fiber Logo" 
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-            />
-          </div>
 
+      {/* HEADER */}
+      <header style={{
+        backdropFilter: 'blur(12px)',
+        background: 'rgba(15,23,42,0.7)',
+        borderBottom: '1px solid rgba(56,189,248,0.2)',
+        padding: '10px 16px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+
+        {/* LOGO */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img src="/logo.png" style={{ width: 45 }} />
           <div>
-            <h1 style={{ 
-              margin: 0, 
-              fontSize: '18px', 
-              fontWeight: '900', 
-              color: '#38bdf8', 
-              letterSpacing: '0.5px',
-              textShadow: '0 2px 8px rgba(56, 189, 248, 0.3)'
-            }}>
-              خان فائبر انٹرنیٹ نیٹ ورک
-            </h1>
-            <p style={{ margin: 0, fontSize: '10px', color: '#94a3b8', fontWeight: '500' }}>
-              خودکار ISP مینجمنٹ پورٹل
-            </p>
+            <h2 style={{ margin: 0, color: '#38bdf8' }}>One Click</h2>
+            <small style={{ color: '#94a3b8' }}>by Layyah Fiber</small>
           </div>
         </div>
 
-        {/* دائیں طرف ڈیش بورڈ بٹن اور یوزر پروائل (ہیڈن ڈراپ ڈاؤن) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* RIGHT */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           
-          {/* ڈیش بورڈ پر واپس جائیں (اگر ایڈمن پیج ہو) */}
-          {showNavButtons && router.pathname !== '/admin/dashboard' && (
-            <Link href="/admin/dashboard" style={{ 
-              backgroundColor: '#0f172a', 
-              color: '#38bdf8', 
-              padding: '6px 12px', 
-              borderRadius: '8px', 
-              fontSize: '11px', 
-              textDecoration: 'none', 
-              fontWeight: 'bold', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '4px',
-              border: '1px solid #334155'
+          {showNavButtons && (
+            <Link href="/admin/dashboard" style={{
+              background: '#020617',
+              border: '1px solid #38bdf8',
+              padding: '6px 10px',
+              borderRadius: 8,
+              color: '#38bdf8'
             }}>
-              <ArrowRight size={14} />
-              ڈیش بورڈ
+              <ArrowRight size={14}/> ڈیش بورڈ
             </Link>
           )}
 
-          {/* پروفائل ڈراپ ڈاؤن مینو */}
-          <div style={{ position: 'relative' }} ref={menuRef}>
-            <button 
-              onClick={() => setShowMenu(!showMenu)}
-              style={{ 
-                backgroundColor: '#0f172a', 
-                color: '#ffffff', 
-                border: '1px solid #3b82f6', 
-                padding: '6px 10px', 
-                borderRadius: '8px', 
-                fontSize: '11px', 
-                fontWeight: 'bold', 
-                cursor: 'pointer', 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '6px' 
-              }}
-            >
-              <User size={14} style={{ color: '#38bdf8' }} />
-              <span>{user?.full_name || 'اکاؤنٹ'}</span>
-              <ChevronDown size={12} style={{ color: '#94a3b8' }} />
+          <div ref={menuRef} style={{ position: 'relative' }}>
+            <button onClick={() => setShowMenu(!showMenu)} style={{
+              background: '#020617',
+              border: '1px solid #38bdf8',
+              padding: '6px 10px',
+              borderRadius: 8
+            }}>
+              <User size={14}/> {user?.full_name || 'اکاؤنٹ'}
             </button>
 
-            {/* ہیڈن ڈراپ ڈاؤن لسٹ */}
             {showMenu && (
-              <div style={{ 
-                position: 'absolute', 
-                top: '110%', 
-                left: 0, 
-                backgroundColor: '#1c2541', 
-                border: '1px solid #3b82f6', 
-                borderRadius: '10px', 
-                boxShadow: '0 8px 24px rgba(0,0,0,0.5)', 
-                minWidth: '160px', 
-                zIndex: 100, 
-                overflow: 'hidden' 
+              <div style={{
+                position: 'absolute',
+                top: '110%',
+                left: 0,
+                background: '#020617',
+                border: '1px solid #38bdf8',
+                borderRadius: 10
               }}>
-                {/* 1. پاسورڈ تبدیل کریں */}
-                <button 
-                  onClick={() => {
-                    setShowPasswordModal(true);
-                    setShowMenu(false);
-                  }}
-                  style={{ 
-                    width: '100%', 
-                    padding: '10px 12px', 
-                    backgroundColor: 'transparent', 
-                    color: '#fbbf24', 
-                    border: 'none', 
-                    borderBottom: '1px solid #334155', 
-                    fontSize: '11px', 
-                    fontWeight: 'bold', 
-                    cursor: 'pointer', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '8px',
-                    textAlign: 'right'
-                  }}
-                >
-                  <KeyRound size={14} />
-                  پاسورڈ تبدیل کریں
-                </button>
-
-                {/* 2. لاگ آؤٹ */}
-                <button 
-                  onClick={handleLogout}
-                  style={{ 
-                    width: '100%', 
-                    padding: '10px 12px', 
-                    backgroundColor: 'transparent', 
-                    color: '#f87171', 
-                    border: 'none', 
-                    fontSize: '11px', 
-                    fontWeight: 'bold', 
-                    cursor: 'pointer', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '8px',
-                    textAlign: 'right'
-                  }}
-                >
-                  <LogOut size={14} />
-                  لاگ آؤٹ کریں
-                </button>
+                <button onClick={() => setShowPasswordModal(true)}>پاسورڈ تبدیل کریں</button>
+                <button onClick={handleLogout}>لاگ آؤٹ</button>
               </div>
             )}
           </div>
-
         </div>
-
       </header>
 
-      {/* 2. مرکزی مواد (Page Content) */}
-      <main style={{ padding: '16px', flex: 1, maxWidth: '1400px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+      {/* MAIN */}
+      <main style={{ flex: 1, padding: 16 }}>
         {children}
       </main>
 
-      {/* 3. فوٹر بار (Copyright & Powered By) */}
-      <footer style={{ 
-        backgroundColor: '#1c2541', 
-        borderTop: '1px solid #334155', 
-        padding: '12px 16px', 
-        textAlign: 'center', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        gap: '4px',
-        marginTop: '20px'
+      {/* FOOTER */}
+      <footer style={{
+        background: 'rgba(15,23,42,0.8)',
+        borderTop: '1px solid rgba(56,189,248,0.2)',
+        padding: 16,
+        textAlign: 'center'
       }}>
-        <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <ShieldCheck size={14} style={{ color: '#10b981' }} />
-          © {new Date().getFullYear()} خان فائبر انٹرنیٹ نیٹ ورک۔ تمام حقوق محفوظ ہیں۔
+        
+        {/* COMPANY */}
+        <div style={{ marginBottom: 6 }}>
+          <strong style={{ color: '#38bdf8' }}>
+            Haider Fiber Network SMC-Private Limited
+          </strong>
+        </div>
+
+        {/* WATEEN LOGO */}
+        <div style={{ marginBottom: 6 }}>
+          <img src="/wateen.png" style={{ width: 80 }} />
+        </div>
+
+        <p style={{ fontSize: 11, color: '#94a3b8' }}>
+          © {new Date().getFullYear()} One Click — All Rights Reserved
         </p>
-        <p style={{ margin: 0, fontSize: '10px', color: '#38bdf8', fontWeight: 'bold', direction: 'ltr' }}>
-          Powered by Saqaa Software Services
-        </p>
+
       </footer>
 
-      {/* 4. پاسورڈ تبدیل کرنے کا پاپ اپ (Modal) */}
+      {/* MODAL */}
       {showPasswordModal && (
-        <div style={{ 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
-          backgroundColor: 'rgba(0,0,0,0.7)', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          zIndex: 100, 
-          padding: '16px' 
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
         }}>
-          <div style={{ 
-            backgroundColor: '#1c2541', 
-            border: '1px solid #3b82f6', 
-            borderRadius: '14px', 
-            padding: '20px', 
-            width: '100%', 
-            maxWidth: '340px', 
-            position: 'relative',
-            boxShadow: '0 12px 32px rgba(0,0,0,0.6)'
+          <div style={{
+            background: '#020617',
+            padding: 20,
+            borderRadius: 12
           }}>
-            
-            <button 
-              onClick={() => setShowPasswordModal(false)} 
-              style={{ position: 'absolute', top: '12px', left: '12px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
-            >
-              <X size={18} />
-            </button>
-
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#38bdf8', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <KeyRound size={16} /> نیا پاسورڈ درج کریں
-            </h3>
-
-            {msg && (
-              <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', color: '#34d399', padding: '8px', borderRadius: '6px', fontSize: '11px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <CheckCircle2 size={14} /> {msg}
-              </div>
-            )}
-
-            <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <input 
-                type="password"
-                required
-                placeholder="نیا پاسورڈ ٹائپ کریں"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }}
-              />
-
-              <button type="submit" style={{ backgroundColor: '#3b82f6', color: '#fff', border: 'none', padding: '8px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
-                پاسورڈ محفوظ کریں
-              </button>
+            <h3>نیا پاسورڈ</h3>
+            {msg && <p>{msg}</p>}
+            <form onSubmit={handleChangePassword}>
+              <input type="password" value={newPassword}
+                onChange={(e)=>setNewPassword(e.target.value)} />
+              <button type="submit">محفوظ کریں</button>
             </form>
-
           </div>
         </div>
       )}
-
     </div>
   );
 }
