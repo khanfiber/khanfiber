@@ -1,7 +1,7 @@
 {
-  "name": "خان فائبر نیٹ ورک",
-  "short_name": "KhanFiber",
-  "description": "خان فائبر انٹرنیٹ مینجمنٹ سسٹم",
+  "name": "One Click - Haider Fiber Network",
+  "short_name": "One Click",
+  "description": "One Click - Haider Fiber Network Internet Management System",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
