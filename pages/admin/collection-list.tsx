@@ -2,426 +2,1272 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../../components/Layout';
 import { supabase } from '../../lib/supabaseClient';
 import { openWhatsAppDirect } from '../../lib/whatsapp';
-import { 
-  FileText, 
-  Search, 
-  RefreshCw, 
-  CheckCircle2, 
-  Clock, 
+import {
+  FileText,
+  Search,
+  RefreshCw,
+  CheckCircle2,
+  Clock,
   Users,
   TrendingUp,
   CreditCard,
-  MessageSquare
+  MessageSquare,
+  AlertCircle,
+  Wifi,
+  User,
+  Phone
 } from 'lucide-react';
+
+// ============================================================
+// TYPES
+// ============================================================
 
 interface CustomerStatusType {
   id: number;
+  serial_number: string;
   full_name: string;
   father_name: string;
   pppoe_username: string;
   phone: string;
   whatsapp: string;
+  package_name: string;
+  speed: string;
   monthly_price: number;
+  connection_charges: number;
   last_paid_amount: number;
   remaining_balance: number;
   is_paid: boolean;
 }
 
+interface TotalsType {
+  collectedAmount: number;
+  pendingAmount: number;
+}
+
+// ============================================================
+// MAIN PAGE
+// ============================================================
+
 export default function CollectionListPage() {
   const [customers, setCustomers] = useState<CustomerStatusType[]>([]);
-  const [activeTab, setActiveTab] = useState<'paid' | 'pending'>('pending');
+
+  const [activeTab, setActiveTab] =
+    useState<'paid' | 'pending'>('pending');
+
   const [searchTerm, setSearchTerm] = useState('');
+
   const [fetching, setFetching] = useState(true);
 
-  // لائیو اینالیٹکس رقوم
-  const [totals, setTotals] = useState({
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // ==========================================================
+  // ANALYTICS TOTALS
+  // ==========================================================
+
+  const [totals, setTotals] = useState<TotalsType>({
     collectedAmount: 0,
     pendingAmount: 0
   });
 
-  // Supabase سے کسٹمرز اور ان کی بلنگ ہسٹری حاصل کرنا
+  // ==========================================================
+  // LOAD DATA FROM SUPABASE
+  // ==========================================================
+
   const fetchData = async () => {
     setFetching(true);
+    setErrorMessage('');
+
     try {
-      // Step 1: تمام صارفین
-      const { data: custData } = await supabase.from('customers').select('*');
-      
-      // Step 2: تمام بل وصولیاں
-      const { data: colData } = await supabase
+      // ------------------------------------------------------
+      // STEP 1: CUSTOMERS
+      // ------------------------------------------------------
+
+      const {
+        data: custData,
+        error: custError
+      } = await supabase
+        .from('customers')
+        .select(`
+          id,
+          serial_number,
+          full_name,
+          father_name,
+          pppoe_username,
+          phone,
+          whatsapp,
+          package_name,
+          speed,
+          monthly_price,
+          connection_charges
+        `)
+        .order('full_name', { ascending: true });
+
+      if (custError) {
+        throw new Error(
+          `Customers Error: ${custError.message}`
+        );
+      }
+
+      // ------------------------------------------------------
+      // STEP 2: COLLECTIONS
+      // ------------------------------------------------------
+
+      const {
+        data: colData,
+        error: colError
+      } = await supabase
         .from('collections')
-        .select('*')
+        .select(`
+          id,
+          customer_id,
+          previous_arrears,
+          current_bill,
+          total_amount,
+          paid_amount,
+          remaining_balance,
+          payment_date
+        `)
         .order('id', { ascending: false });
 
-      if (custData) {
-        let totalCollected = 0;
-        let totalPending = 0;
+      if (colError) {
+        throw new Error(
+          `Collections Error: ${colError.message}`
+        );
+      }
 
-        const formattedList: CustomerStatusType[] = custData.map((c) => {
-          // کسٹمر کی سب سے آخری وصولی ہسٹری
-          const customerCols = colData?.filter((col) => col.customer_id === c.id) || [];
-          const customerLatestCol = customerCols[0];
+      // ------------------------------------------------------
+      // FORMAT CUSTOMERS
+      // ------------------------------------------------------
 
-          // اگر پہلی بار ہے اور کوئی کلیکشن نہیں ہے تو کنکشن چارجز + ماہانہ بل ملائیں
-          const initialCharges = Number(c.connection_charges || 0) + Number(c.monthly_price || 0);
+      const formattedList: CustomerStatusType[] =
+        (custData || []).map((customer: any) => {
 
-          const remaining = customerLatestCol 
-            ? Number(customerLatestCol.remaining_balance || 0) 
-            : initialCharges;
-            
-          const lastPaid = customerLatestCol ? Number(customerLatestCol.paid_amount || 0) : 0;
-          
-          const isPaid = remaining <= 0;
+          // اس customer کی collections
+          const customerCollections =
+            (colData || []).filter(
+              (collection: any) =>
+                Number(collection.customer_id) ===
+                Number(customer.id)
+            );
 
-          if (isPaid) {
-            totalCollected += lastPaid;
-          } else {
-            totalPending += remaining;
-          }
+          // چونکہ collections ID descending میں ہیں،
+          // اس لیے پہلا record latest ہے
+          const latestCollection =
+            customerCollections.length > 0
+              ? customerCollections[0]
+              : null;
+
+          // --------------------------------------------------
+          // اگر ابھی کوئی collection نہیں ہوئی
+          // تو Connection Charges + Monthly Bill pending ہوگا
+          // --------------------------------------------------
+
+          const initialAmount =
+            Number(customer.connection_charges || 0) +
+            Number(customer.monthly_price || 0);
+
+          const remainingBalance =
+            latestCollection
+              ? Number(
+                  latestCollection.remaining_balance || 0
+                )
+              : initialAmount;
+
+          const lastPaidAmount =
+            latestCollection
+              ? Number(latestCollection.paid_amount || 0)
+              : 0;
+
+          const isPaid =
+            remainingBalance <= 0;
 
           return {
-            id: c.id,
-            full_name: c.full_name || 'نامعلوم',
-            father_name: c.father_name || '---',
-            pppoe_username: c.pppoe_username || '---',
-            phone: c.phone || '---',
-            whatsapp: c.whatsapp || c.phone || '---',
-            monthly_price: Number(c.monthly_price || 0),
-            last_paid_amount: lastPaid,
-            remaining_balance: remaining,
-            is_paid: isPaid
+            id: customer.id,
+
+            serial_number:
+              customer.serial_number || '---',
+
+            full_name:
+              customer.full_name || 'نامعلوم',
+
+            father_name:
+              customer.father_name || '---',
+
+            pppoe_username:
+              customer.pppoe_username || '---',
+
+            phone:
+              customer.phone || '---',
+
+            whatsapp:
+              customer.whatsapp ||
+              customer.phone ||
+              '---',
+
+            package_name:
+              customer.package_name || '---',
+
+            speed:
+              customer.speed || '---',
+
+            monthly_price:
+              Number(customer.monthly_price || 0),
+
+            connection_charges:
+              Number(customer.connection_charges || 0),
+
+            last_paid_amount:
+              lastPaidAmount,
+
+            remaining_balance:
+              remainingBalance,
+
+            is_paid:
+              isPaid
           };
         });
 
-        setCustomers(formattedList);
-        setTotals({
-          collectedAmount: totalCollected,
-          pendingAmount: totalPending
-        });
-      }
-    } catch (err) {
-      console.error('Fetch Collection Error:', err);
+      // ======================================================
+      // CALCULATE ANALYTICS
+      // ======================================================
+
+      let totalCollected = 0;
+      let totalPending = 0;
+
+      // تمام collections میں وصول شدہ رقم
+      (colData || []).forEach((collection: any) => {
+        totalCollected +=
+          Number(collection.paid_amount || 0);
+      });
+
+      // تمام customers کا موجودہ pending balance
+      formattedList.forEach((customer) => {
+        if (customer.remaining_balance > 0) {
+          totalPending +=
+            customer.remaining_balance;
+        }
+      });
+
+      setCustomers(formattedList);
+
+      setTotals({
+        collectedAmount: totalCollected,
+        pendingAmount: totalPending
+      });
+
+    } catch (err: any) {
+      console.error(
+        'Fetch Collection Error:',
+        err
+      );
+
+      setErrorMessage(
+        err?.message ||
+          'ڈیٹا لوڈ کرنے میں خرابی پیش آئی۔'
+      );
+
     } finally {
       setFetching(false);
     }
   };
 
+  // ==========================================================
+  // INITIAL LOAD
+  // ==========================================================
+
   useEffect(() => {
     fetchData();
   }, []);
 
-  // شمار
+  // ==========================================================
+  // COUNTERS
+  // ==========================================================
+
   const totalUsers = customers.length;
-  const paidCount = customers.filter(c => c.is_paid).length;
-  const pendingCount = customers.filter(c => !c.is_paid).length;
 
-  // سرچ و فلٹر
-  const filteredCustomers = customers.filter((c) => {
-    const matchesTab = activeTab === 'paid' ? c.is_paid : !c.is_paid;
-    const search = searchTerm.toLowerCase();
-    const matchesSearch = 
-      c.full_name.toLowerCase().includes(search) ||
-      c.pppoe_username.toLowerCase().includes(search) ||
-      c.phone.includes(search);
+  const paidCount =
+    customers.filter(
+      (customer) => customer.is_paid
+    ).length;
 
-    return matchesTab && matchesSearch;
-  });
+  const pendingCount =
+    customers.filter(
+      (customer) => !customer.is_paid
+    ).length;
 
-  // پینڈنگ بل کا واٹس ایپ تذکیر میسج بھیجنے کا طریقہ
-  const handleSendReminder = (customer: CustomerStatusType) => {
-    const targetPhone = customer.whatsapp || customer.phone;
-    if (!targetPhone || targetPhone === '---') {
-      alert('اس صارف کا واٹس ایپ یا فون نمبر موجود نہیں ہے!');
+  // ==========================================================
+  // SEARCH + TAB FILTER
+  // ==========================================================
+
+  const filteredCustomers =
+    customers.filter((customer) => {
+
+      const matchesTab =
+        activeTab === 'paid'
+          ? customer.is_paid
+          : !customer.is_paid;
+
+      const search =
+        searchTerm.toLowerCase().trim();
+
+      const matchesSearch =
+        search === '' ||
+        customer.full_name
+          .toLowerCase()
+          .includes(search) ||
+        customer.father_name
+          .toLowerCase()
+          .includes(search) ||
+        customer.pppoe_username
+          .toLowerCase()
+          .includes(search) ||
+        customer.serial_number
+          .toLowerCase()
+          .includes(search) ||
+        customer.phone
+          .toLowerCase()
+          .includes(search);
+
+      return matchesTab && matchesSearch;
+    });
+
+  // ==========================================================
+  // WHATSAPP REMINDER
+  // ==========================================================
+
+  const handleSendReminder = (
+    customer: CustomerStatusType
+  ) => {
+
+    const targetPhone =
+      customer.whatsapp ||
+      customer.phone;
+
+    if (
+      !targetPhone ||
+      targetPhone === '---'
+    ) {
+      alert(
+        'اس صارف کا WhatsApp یا فون نمبر موجود نہیں ہے!'
+      );
       return;
     }
 
-    const reminderMessage = 
-      `*خان فائبر انٹرنیٹ نیٹ ورک - بل تذکیر (Reminder Notice)*\n\n` +
-      `محترم *${customer.full_name}*!\n` +
-      `آپ کا ماہانہ انٹرنیٹ بل *Rs ${customer.remaining_balance}* واجب الادا (پینڈنگ) ہے۔\n\n` +
-      `⚠️ *برائے مہربانی اپنا بل جلد از جلد جمع کروائیں۔* وقت پر بل جمع نہ کروانے کی صورت میں آپ کا انٹرنیٹ کنکشن عارضی طور پر بند کر دیا جائے گا۔\n\n` +
-      `اگر آپ بل جمع کروا چکے ہیں تو برائے مہربانی رسید شیئر کریں۔\n\n` +
-      `شکریہ!\n` +
-      `*خان فائبر نیٹ ورک ٹیم*`;
+    const currentDate =
+      new Date().toLocaleDateString('en-GB');
 
-    openWhatsAppDirect(targetPhone, reminderMessage);
+    const reminderMessage =
+      `🌐 *ONE CLICK | HAIDER FIBER NETWORK*\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `🔔 *بل یاددہانی / PAYMENT REMINDER*\n\n` +
+
+      `محترم *${customer.full_name}*!\n\n` +
+
+      `آپ کے انٹرنیٹ اکاؤنٹ پر بل واجب الادا ہے۔\n\n` +
+
+      `👤 *صارف کی تفصیلات*\n` +
+      `▫️ Customer ID: ${customer.serial_number}\n` +
+      `▫️ PPPoE User: ${customer.pppoe_username}\n` +
+      `▫️ Package: ${customer.package_name}\n` +
+      `▫️ Speed: ${customer.speed}\n\n` +
+
+      `💰 *بل کی تفصیلات*\n` +
+      `▫️ ماہانہ بل: Rs ${customer.monthly_price.toLocaleString()}\n` +
+      `🔻 *کل بقایا رقم: Rs ${customer.remaining_balance.toLocaleString()}*\n\n` +
+
+      `⚠️ *براہِ مہربانی اپنا واجب الادا بل جلد از جلد جمع کروائیں۔*\n\n` +
+
+      `وقت پر بل جمع نہ کروانے کی صورت میں انٹرنیٹ سروس عارضی طور پر معطل کی جا سکتی ہے۔\n\n` +
+
+      `اگر آپ بل پہلے ہی جمع کروا چکے ہیں تو براہِ مہربانی اپنی رسید شیئر کر دیں۔\n\n` +
+
+      `📅 تاریخ: ${currentDate}\n\n` +
+
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `شکریہ!\n` +
+      `*Haider Fiber Network Team*\n` +
+      `Powered by *One Click*`;
+
+    openWhatsAppDirect(
+      targetPhone,
+      reminderMessage
+    );
   };
+
+  // ==========================================================
+  // PAGE
+  // ==========================================================
 
   return (
     <Layout showNavButtons={true}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
-        
-        {/* 1. مختصر ٹاپ ہیڈر */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between',
-          backgroundColor: '#1c2541', 
-          padding: '10px 14px', 
-          borderRadius: '12px', 
-          border: '1px solid #3b82f6' 
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ backgroundColor: 'rgba(139, 92, 246, 0.2)', padding: '6px', borderRadius: '8px', color: '#a78bfa' }}>
-              <FileText size={18} />
-            </div>
-            <div>
-              <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#f472b6' }}>
-                لسٹ پیمنٹ وصولی (Collection Status)
-              </h2>
-              <p style={{ margin: 0, fontSize: '9px', color: '#93c5fd' }}>
-                Supabase لائیو وصولی، پینڈنگ ریکارڑ اور واٹس ایپ نوٹس
-              </p>
-            </div>
-          </div>
-        </div>
 
-        {/* 2. اینالیٹکس کاؤنٹرز (2-Grid Responsive) */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          gap: '10px',
-          width: '100%'
-        }}>
-          {/* کل صارفین */}
-          <div style={{ backgroundColor: '#1c2541', border: '1px solid #3b82f6', borderRadius: '10px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <p style={{ margin: 0, fontSize: '10px', color: '#93c5fd' }}>کل صارفین</p>
-              <h3 style={{ margin: '2px 0 0 0', fontSize: '15px', fontWeight: 'bold', color: '#ffffff' }}>{totalUsers} یوزرز</h3>
-            </div>
-            <div style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', padding: '6px', borderRadius: '6px', color: '#60a5fa' }}>
-              <Users size={16} />
-            </div>
-          </div>
-
-          {/* وصول شدہ یوزرز اور کل وصول رقم */}
-          <div style={{ backgroundColor: '#1c2541', border: '1px solid #10b981', borderRadius: '10px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <p style={{ margin: 0, fontSize: '10px', color: '#34d399', fontWeight: 'bold' }}>کل وصول شدہ ({paidCount} یوزرز)</p>
-              <h3 style={{ margin: '2px 0 0 0', fontSize: '15px', fontWeight: 'bold', color: '#ffffff' }}>Rs {totals.collectedAmount}</h3>
-            </div>
-            <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', padding: '6px', borderRadius: '6px', color: '#34d399' }}>
-              <TrendingUp size={16} />
-            </div>
-          </div>
-
-          {/* پینڈنگ یوزرز اور کل پینڈنگ رقم */}
-          <div style={{ backgroundColor: '#1c2541', border: '1px solid #ef4444', borderRadius: '10px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gridColumn: 'span 1 / -1' }}>
-            <div>
-              <p style={{ margin: 0, fontSize: '10px', color: '#f87171', fontWeight: 'bold' }}>کل پینڈنگ ({pendingCount} یوزرز)</p>
-              <h3 style={{ margin: '2px 0 0 0', fontSize: '16px', fontWeight: 'bold', color: '#ffffff' }}>Rs {totals.pendingAmount}</h3>
-            </div>
-            <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', padding: '6px', borderRadius: '6px', color: '#f87171' }}>
-              <CreditCard size={16} />
-            </div>
-          </div>
-        </div>
-
-        {/* 3. سوئچر ٹیبز و سرچ بار */}
-        <div style={{ 
-          backgroundColor: '#1c2541', 
-          borderRadius: '12px', 
-          padding: '12px', 
-          border: '1px solid #334155',
+      <div
+        style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: '10px'
-        }}>
-          {/* ٹیب سوئچر */}
-          <div style={{
-            backgroundColor: '#0f172a',
-            padding: '4px',
-            borderRadius: '8px',
-            border: '1px solid #334155',
+          gap: '14px',
+          width: '100%'
+        }}
+      >
+
+        {/* ====================================================
+            TOP HEADER
+        ==================================================== */}
+
+        <div
+          style={{
             display: 'flex',
-            gap: '6px'
-          }}>
-            <button
-              onClick={() => setActiveTab('pending')}
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background:
+              'linear-gradient(135deg,#10253e,#0b1e33)',
+            padding: '14px',
+            borderRadius: '16px',
+            border: '1px solid #3b82f6'
+          }}
+        >
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}
+          >
+
+            <div
               style={{
-                flex: 1,
-                padding: '8px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: activeTab === 'pending' ? '#991b1b' : 'transparent',
-                color: activeTab === 'pending' ? '#ffffff' : '#94a3b8',
-                fontWeight: 'bold',
-                fontSize: '11px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px'
+                backgroundColor:
+                  'rgba(139,92,246,0.18)',
+                padding: '9px',
+                borderRadius: '10px',
+                color: '#a78bfa'
               }}
             >
-              <Clock size={14} />
-              پینڈنگ لسٹ ({pendingCount})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('paid')}
-              style={{
-                flex: 1,
-                padding: '8px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: activeTab === 'paid' ? '#065f46' : 'transparent',
-                color: activeTab === 'paid' ? '#ffffff' : '#94a3b8',
-                fontWeight: 'bold',
-                fontSize: '11px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px'
-              }}
-            >
-              <CheckCircle2 size={14} />
-              وصول لسٹ ({paidCount})
-            </button>
-          </div>
-
-          {/* سرچ ان پٹ */}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <input 
-                type="text"
-                placeholder="نام، PPPoE یوزر نیم یا فون سے سرچ کریں..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: '#0f172a',
-                  border: '1px solid #3b82f6',
-                  color: '#ffffff',
-                  padding: '8px 10px 8px 32px',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }}
-              />
-              <Search size={14} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b' }} />
+              <FileText size={20} />
             </div>
 
-            <button 
-              onClick={fetchData}
+            <div>
+
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: '16px',
+                  fontWeight: '900',
+                  color: '#ffffff'
+                }}
+              >
+                بل وصولی لسٹ
+              </h2>
+
+              <p
+                style={{
+                  margin: '3px 0 0',
+                  fontSize: '10px',
+                  color: '#94a3b8'
+                }}
+              >
+                One Click • Haider Fiber Network
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* ====================================================
+            ERROR MESSAGE
+        ==================================================== */}
+
+        {errorMessage && (
+
+          <div
+            style={{
+              backgroundColor:
+                'rgba(239,68,68,0.15)',
+              border:
+                '1px solid #ef4444',
+              color: '#f87171',
+              padding: '12px',
+              borderRadius: '12px',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+
+            <AlertCircle size={17} />
+
+            {errorMessage}
+
+          </div>
+
+        )}
+
+        {/* ====================================================
+            ANALYTICS
+        ==================================================== */}
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns:
+              'repeat(auto-fit,minmax(145px,1fr))',
+            gap: '10px',
+            width: '100%'
+          }}
+        >
+
+          {/* TOTAL USERS */}
+
+          <AnalyticsCard
+            title="کل صارفین"
+            value={`${totalUsers} یوزرز`}
+            color="#60a5fa"
+            icon={<Users size={18} />}
+          />
+
+          {/* COLLECTED */}
+
+          <AnalyticsCard
+            title={`کل وصول شدہ (${paidCount} مکمل ادا)`}
+            value={`Rs ${totals.collectedAmount.toLocaleString()}`}
+            color="#34d399"
+            icon={<TrendingUp size={18} />}
+          />
+
+          {/* PENDING */}
+
+          <AnalyticsCard
+            title={`کل پینڈنگ (${pendingCount} یوزرز)`}
+            value={`Rs ${totals.pendingAmount.toLocaleString()}`}
+            color="#f87171"
+            icon={<CreditCard size={18} />}
+          />
+
+        </div>
+
+        {/* ====================================================
+            TABS + SEARCH
+        ==================================================== */}
+
+        <div
+          style={{
+            background:
+              'linear-gradient(180deg,#10233c,#0d1d32)',
+            borderRadius: '14px',
+            padding: '12px',
+            border: '1px solid #334155',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px'
+          }}
+        >
+
+          {/* TABS */}
+
+          <div
+            style={{
+              backgroundColor: '#071829',
+              padding: '4px',
+              borderRadius: '10px',
+              border: '1px solid #334155',
+              display: 'flex',
+              gap: '6px'
+            }}
+          >
+
+            <button
+              type="button"
+              onClick={() =>
+                setActiveTab('pending')
+              }
               style={{
-                backgroundColor: '#0f172a',
-                color: '#38bdf8',
-                border: '1px solid #334155',
-                padding: '8px 12px',
+                flex: 1,
+                padding: '9px',
                 borderRadius: '8px',
+                border: 'none',
+
+                background:
+                  activeTab === 'pending'
+                    ? 'linear-gradient(135deg,#991b1b,#7f1d1d)'
+                    : 'transparent',
+
+                color:
+                  activeTab === 'pending'
+                    ? '#ffffff'
+                    : '#94a3b8',
+
+                fontWeight: 'bold',
+                fontSize: '11px',
                 cursor: 'pointer',
+
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px'
+              }}
+            >
+
+              <Clock size={14} />
+
+              پینڈنگ ({pendingCount})
+
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setActiveTab('paid')
+              }
+              style={{
+                flex: 1,
+                padding: '9px',
+                borderRadius: '8px',
+                border: 'none',
+
+                background:
+                  activeTab === 'paid'
+                    ? 'linear-gradient(135deg,#047857,#065f46)'
+                    : 'transparent',
+
+                color:
+                  activeTab === 'paid'
+                    ? '#ffffff'
+                    : '#94a3b8',
+
+                fontWeight: 'bold',
+                fontSize: '11px',
+                cursor: 'pointer',
+
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px'
+              }}
+            >
+
+              <CheckCircle2 size={14} />
+
+              وصول شدہ ({paidCount})
+
+            </button>
+
+          </div>
+
+          {/* SEARCH */}
+
+          <div
+            style={{
+              display: 'flex',
+              gap: '8px',
+              alignItems: 'center'
+            }}
+          >
+
+            <div
+              style={{
+                position: 'relative',
+                flex: 1
+              }}
+            >
+
+              <input
+                type="text"
+                placeholder="نام، HFN ID، PPPoE یا فون..."
+                value={searchTerm}
+                onChange={(e) =>
+                  setSearchTerm(e.target.value)
+                }
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  backgroundColor: '#071829',
+                  border:
+                    '1px solid #3b82f6',
+                  color: '#ffffff',
+                  padding:
+                    '10px 38px 10px 10px',
+                  borderRadius: '9px',
+                  fontSize: '12px',
+                  outline: 'none'
+                }}
+              />
+
+              <Search
+                size={15}
+                style={{
+                  position: 'absolute',
+                  right: '11px',
+                  top: '11px',
+                  color: '#38bdf8'
+                }}
+              />
+
+            </div>
+
+            <button
+              type="button"
+              onClick={fetchData}
+              disabled={fetching}
+              style={{
+                backgroundColor: '#071829',
+                color: '#38bdf8',
+                border:
+                  '1px solid #334155',
+                padding: '9px 11px',
+                borderRadius: '9px',
+                cursor: 'pointer',
+
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px',
+
                 fontSize: '11px',
                 fontWeight: 'bold'
               }}
             >
-              <RefreshCw size={14} className={fetching ? 'animate-spin' : ''} />
-              ریفریش
+
+              <RefreshCw
+                size={15}
+                className={
+                  fetching
+                    ? 'animate-spin'
+                    : ''
+                }
+              />
+
+              <span
+                className="refreshText"
+              >
+                ریفریش
+              </span>
+
             </button>
+
           </div>
+
         </div>
 
-        {/* 4. ٹیبل لسٹ */}
-        <div style={{ 
-          backgroundColor: '#1c2541', 
-          borderRadius: '12px', 
-          padding: '12px', 
-          border: '1px solid #334155',
-          overflowX: 'auto'
-        }}>
-          {fetching ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: '#38bdf8', fontSize: '12px' }}>
-              Supabase سے ڈیٹا لوڈ ہو رہا ہے...
-            </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#0f172a', borderBottom: '1px solid #334155', color: '#94a3b8' }}>
-                  <th style={{ padding: '8px' }}>#</th>
-                  <th style={{ padding: '8px' }}>نام</th>
-                  <th style={{ padding: '8px' }}>PPPoE یوزر نیم</th>
-                  <th style={{ padding: '8px' }}>فون</th>
-                  <th style={{ padding: '8px' }}>ماہانہ بل</th>
-                  <th style={{ padding: '8px' }}>جمع شدہ</th>
-                  <th style={{ padding: '8px' }}>بقیہ (Remaining)</th>
-                  <th style={{ padding: '8px', textAlign: 'center' }}>سٹیٹس و ایکشن</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCustomers.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '16px', color: '#64748b' }}>
-                      کوئی ریکارڈ نہیں ملا۔
-                    </td>
-                  </tr>
-                ) : (
-                  filteredCustomers.map((user, index) => (
-                    <tr key={user.id} style={{ borderBottom: '1px solid #1e293b' }}>
-                      <td style={{ padding: '8px', color: '#64748b' }}>{index + 1}</td>
-                      <td style={{ padding: '8px', fontWeight: 'bold', color: '#ffffff' }}>
-                        {user.full_name}
-                      </td>
-                      <td style={{ padding: '8px', color: '#38bdf8', direction: 'ltr', textAlign: 'right', fontWeight: 'bold' }}>
-                        {user.pppoe_username}
-                      </td>
-                      <td style={{ padding: '8px', color: '#cbd5e1' }}>
-                        {user.phone}
-                      </td>
-                      <td style={{ padding: '8px', color: '#38bdf8', fontWeight: 'bold' }}>
-                        Rs {user.monthly_price}
-                      </td>
-                      <td style={{ padding: '8px', color: '#34d399', fontWeight: 'bold' }}>
-                        Rs {user.last_paid_amount}
-                      </td>
-                      <td style={{ padding: '8px', color: user.remaining_balance > 0 ? '#f87171' : '#34d399', fontWeight: 'bold' }}>
-                        Rs {user.remaining_balance}
-                      </td>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>
-                        {user.is_paid ? (
-                          <span style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '4px 8px', borderRadius: '10px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <CheckCircle2 size={11} /> وصول شدہ
-                          </span>
-                        ) : (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)', padding: '4px 8px', borderRadius: '10px', fontSize: '10px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                              <Clock size={11} /> پینڈنگ
-                            </span>
+        {/* ====================================================
+            LIST / TABLE
+        ==================================================== */}
 
-                            {/* واٹس ایپ ریمائنڈر بٹن */}
-                            <button
-                              onClick={() => handleSendReminder(user)}
-                              title="واٹس ایپ پر بل نوٹس بھیجیں"
+        <div
+          style={{
+            background:
+              'linear-gradient(180deg,#10233c,#0d1d32)',
+            borderRadius: '14px',
+            padding: '10px',
+            border: '1px solid #334155',
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
+
+          {fetching ? (
+
+            <div
+              style={{
+                padding: '30px',
+                textAlign: 'center',
+                color: '#38bdf8',
+                fontSize: '12px'
+              }}
+            >
+
+              <RefreshCw
+                size={20}
+                className="animate-spin"
+                style={{
+                  marginBottom: '8px'
+                }}
+              />
+
+              <div>
+                Supabase سے ڈیٹا لوڈ ہو رہا ہے...
+              </div>
+
+            </div>
+
+          ) : filteredCustomers.length === 0 ? (
+
+            <div
+              style={{
+                padding: '30px 10px',
+                textAlign: 'center',
+                color: '#64748b',
+                fontSize: '12px'
+              }}
+            >
+              کوئی ریکارڈ نہیں ملا۔
+            </div>
+
+          ) : (
+
+            <table
+              style={{
+                width: '100%',
+                minWidth: '950px',
+                borderCollapse: 'collapse',
+                textAlign: 'right',
+                fontSize: '11px'
+              }}
+            >
+
+              <thead>
+
+                <tr
+                  style={{
+                    backgroundColor: '#071829',
+                    borderBottom:
+                      '1px solid #334155',
+                    color: '#94a3b8'
+                  }}
+                >
+
+                  <th style={thStyle}>
+                    #
+                  </th>
+
+                  <th style={thStyle}>
+                    HFN ID
+                  </th>
+
+                  <th style={thStyle}>
+                    صارف
+                  </th>
+
+                  <th style={thStyle}>
+                    PPPoE
+                  </th>
+
+                  <th style={thStyle}>
+                    پیکیج
+                  </th>
+
+                  <th style={thStyle}>
+                    ماہانہ بل
+                  </th>
+
+                  <th style={thStyle}>
+                    آخری جمع
+                  </th>
+
+                  <th style={thStyle}>
+                    بقایا
+                  </th>
+
+                  <th
+                    style={{
+                      ...thStyle,
+                      textAlign: 'center'
+                    }}
+                  >
+                    سٹیٹس / ایکشن
+                  </th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {filteredCustomers.map(
+                  (user, index) => (
+
+                    <tr
+                      key={user.id}
+                      style={{
+                        borderBottom:
+                          '1px solid #1e293b'
+                      }}
+                    >
+
+                      <td style={tdStyle}>
+                        <span
+                          style={{
+                            color: '#64748b'
+                          }}
+                        >
+                          {index + 1}
+                        </span>
+                      </td>
+
+                      {/* HFN ID */}
+
+                      <td style={tdStyle}>
+                        <span
+                          style={{
+                            color: '#22d3ee',
+                            fontWeight: 'bold',
+                            direction: 'ltr'
+                          }}
+                        >
+                          {user.serial_number}
+                        </span>
+                      </td>
+
+                      {/* CUSTOMER */}
+
+                      <td style={tdStyle}>
+
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '7px'
+                          }}
+                        >
+
+                          <div
+                            style={{
+                              backgroundColor:
+                                'rgba(59,130,246,0.15)',
+                              padding: '5px',
+                              borderRadius: '6px',
+                              color: '#60a5fa'
+                            }}
+                          >
+                            <User size={13} />
+                          </div>
+
+                          <div>
+
+                            <div
                               style={{
-                                backgroundColor: '#10b981',
-                                color: '#ffffff',
-                                border: 'none',
-                                padding: '4px 8px',
-                                borderRadius: '6px',
-                                fontSize: '10px',
                                 fontWeight: 'bold',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
+                                color: '#ffffff'
+                              }}
+                            >
+                              {user.full_name}
+                            </div>
+
+                            <div
+                              style={{
+                                marginTop: '2px',
+                                color: '#64748b',
+                                fontSize: '9px',
+                                display: 'flex',
                                 alignItems: 'center',
                                 gap: '3px'
                               }}
                             >
-                              <MessageSquare size={11} />
-                              واٹس ایپ نوٹس
-                            </button>
+                              <Phone size={9} />
+                              {user.phone}
+                            </div>
+
                           </div>
-                        )}
+
+                        </div>
+
                       </td>
+
+                      {/* PPPOE */}
+
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: '#38bdf8',
+                          direction: 'ltr',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        {user.pppoe_username}
+                      </td>
+
+                      {/* PACKAGE */}
+
+                      <td style={tdStyle}>
+
+                        <div
+                          style={{
+                            color: '#c4b5fd',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {user.package_name}
+                        </div>
+
+                        <div
+                          style={{
+                            color: '#34d399',
+                            fontSize: '9px',
+                            marginTop: '2px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '3px'
+                          }}
+                        >
+                          <Wifi size={9} />
+                          {user.speed}
+                        </div>
+
+                      </td>
+
+                      {/* MONTHLY */}
+
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: '#38bdf8',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        Rs{' '}
+                        {user.monthly_price.toLocaleString()}
+                      </td>
+
+                      {/* LAST PAID */}
+
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: '#34d399',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        Rs{' '}
+                        {user.last_paid_amount.toLocaleString()}
+                      </td>
+
+                      {/* REMAINING */}
+
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color:
+                            user.remaining_balance > 0
+                              ? '#f87171'
+                              : '#34d399',
+                          fontWeight: '900'
+                        }}
+                      >
+                        Rs{' '}
+                        {user.remaining_balance.toLocaleString()}
+                      </td>
+
+                      {/* STATUS */}
+
+                      <td
+                        style={{
+                          ...tdStyle,
+                          textAlign: 'center'
+                        }}
+                      >
+
+                        {user.is_paid ? (
+
+                          <span
+                            style={{
+                              backgroundColor:
+                                'rgba(16,185,129,0.15)',
+                              color: '#34d399',
+                              border:
+                                '1px solid rgba(16,185,129,0.4)',
+                              padding: '5px 9px',
+                              borderRadius: '10px',
+                              fontSize: '10px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+
+                            <CheckCircle2
+                              size={11}
+                            />
+
+                            وصول شدہ
+
+                          </span>
+
+                        ) : (
+
+                          <div
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                          >
+
+                            <span
+                              style={{
+                                backgroundColor:
+                                  'rgba(239,68,68,0.15)',
+                                color: '#f87171',
+                                border:
+                                  '1px solid rgba(239,68,68,0.4)',
+                                padding: '5px 8px',
+                                borderRadius: '9px',
+                                fontSize: '10px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+
+                              <Clock size={11} />
+
+                              پینڈنگ
+
+                            </span>
+
+                            {/* WHATSAPP BUTTON */}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleSendReminder(
+                                  user
+                                )
+                              }
+                              title="WhatsApp پر بل Reminder بھیجیں"
+                              style={{
+                                background:
+                                  'linear-gradient(135deg,#10b981,#059669)',
+                                color: '#ffffff',
+                                border: 'none',
+                                padding: '6px 9px',
+                                borderRadius: '7px',
+                                fontSize: '10px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                display:
+                                  'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+
+                              <MessageSquare
+                                size={11}
+                              />
+
+                              WhatsApp
+
+                            </button>
+
+                          </div>
+
+                        )}
+
+                      </td>
+
                     </tr>
-                  ))
+
+                  )
                 )}
+
               </tbody>
+
             </table>
+
           )}
+
         </div>
 
       </div>
+
     </Layout>
   );
 }
+
+// ============================================================
+// ANALYTICS CARD COMPONENT
+// ============================================================
+
+function AnalyticsCard({
+  title,
+  value,
+  color,
+  icon
+}: {
+  title: string;
+  value: string;
+  color: string;
+  icon: React.ReactNode;
+}) {
+
+  return (
+
+    <div
+      style={{
+        background:
+          'linear-gradient(135deg,#17233f,#1c2541)',
+        border: `1px solid ${color}`,
+        borderRadius: '12px',
+        padding: '11px 12px',
+
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+
+        minHeight: '62px'
+      }}
+    >
+
+      <div>
+
+        <p
+          style={{
+            margin: 0,
+            fontSize: '10px',
+            color,
+            fontWeight: 'bold'
+          }}
+        >
+          {title}
+        </p>
+
+        <h3
+          style={{
+            margin: '4px 0 0',
+            fontSize: '16px',
+            fontWeight: '900',
+            color: '#ffffff'
+          }}
+        >
+          {value}
+        </h3>
+
+      </div>
+
+      <div
+        style={{
+          backgroundColor:
+            'rgba(255,255,255,0.06)',
+          padding: '8px',
+          borderRadius: '8px',
+          color
+        }}
+      >
+        {icon}
+      </div>
+
+    </div>
+
+  );
+}
+
+// ============================================================
+// TABLE STYLES
+// ============================================================
+
+const thStyle: React.CSSProperties = {
+  padding: '9px 8px',
+  fontSize: '10px',
+  whiteSpace: 'nowrap'
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: '9px 8px',
+  whiteSpace: 'nowrap',
+  color: '#cbd5e1'
+};
