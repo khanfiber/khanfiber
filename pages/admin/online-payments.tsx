@@ -1,5 +1,6 @@
 import React, {
   useEffect,
+  useMemo,
   useState
 } from 'react';
 
@@ -18,18 +19,20 @@ import {
   Eye,
   Receipt,
   AlertCircle,
-  User,
-  CreditCard
+  WalletCards
 } from 'lucide-react';
+
+/* =========================================================
+   TYPES
+========================================================= */
 
 interface PaymentType {
   id: number;
   customer_id: number;
 
-  transaction_id: string;
+  transaction_id: string | null;
 
   payment_method: string;
-
   amount: number;
 
   receipt_url?: string | null;
@@ -42,17 +45,19 @@ interface PaymentType {
   created_at: string;
 
   customers?: {
-    serial_number?: string;
     full_name: string;
+    serial_number?: string | null;
     pppoe_username: string;
     phone: string;
     whatsapp: string;
     monthly_price?: number;
     connection_charges?: number;
-    package_name?: string;
-    speed?: string;
-  };
+  } | null;
 }
+
+/* =========================================================
+   PAGE
+========================================================= */
 
 export default function OnlinePaymentsPage() {
   const [payments, setPayments] =
@@ -60,6 +65,11 @@ export default function OnlinePaymentsPage() {
 
   const [searchTerm, setSearchTerm] =
     useState('');
+
+  const [statusFilter, setStatusFilter] =
+    useState<
+      'all' | 'pending' | 'approved' | 'rejected'
+    >('pending');
 
   const [fetching, setFetching] =
     useState(true);
@@ -70,16 +80,18 @@ export default function OnlinePaymentsPage() {
   ] = useState<number | null>(null);
 
   const [
+    errorMessage,
+    setErrorMessage
+  ] = useState('');
+
+  const [
     selectedReceipt,
     setSelectedReceipt
   ] = useState<string | null>(null);
 
-  const [errorMessage, setErrorMessage] =
-    useState('');
-
-  // =========================================================
-  // FETCH PAYMENTS
-  // =========================================================
+  /* =========================================================
+     FETCH PAYMENTS
+  ========================================================= */
 
   const fetchPayments = async () => {
     setFetching(true);
@@ -101,15 +113,13 @@ export default function OnlinePaymentsPage() {
           status,
           created_at,
           customers (
-            serial_number,
             full_name,
+            serial_number,
             pppoe_username,
             phone,
             whatsapp,
             monthly_price,
-            connection_charges,
-            package_name,
-            speed
+            connection_charges
           )
         `)
         .order('id', {
@@ -125,13 +135,13 @@ export default function OnlinePaymentsPage() {
       );
     } catch (err: any) {
       console.error(
-        'Fetch online payments error:',
+        'Online Payments Fetch Error:',
         err
       );
 
       setErrorMessage(
         err?.message ||
-          'Online payments لوڈ نہیں ہو سکیں۔'
+          'آن لائن پیمنٹس لوڈ نہیں ہو سکیں۔'
       );
     } finally {
       setFetching(false);
@@ -142,78 +152,82 @@ export default function OnlinePaymentsPage() {
     fetchPayments();
   }, []);
 
-  // =========================================================
-  // COUNTERS
-  // =========================================================
-
-  const pendingCount =
-    payments.filter(
-      (p) => p.status === 'pending'
-    ).length;
-
-  const approvedCount =
-    payments.filter(
-      (p) => p.status === 'approved'
-    ).length;
-
-  const rejectedCount =
-    payments.filter(
-      (p) => p.status === 'rejected'
-    ).length;
-
-  const pendingAmount =
-    payments
-      .filter(
-        (p) => p.status === 'pending'
-      )
-      .reduce(
-        (sum, p) =>
-          sum + Number(p.amount || 0),
-        0
-      );
-
-  // =========================================================
-  // SEARCH
-  // =========================================================
+  /* =========================================================
+     FILTER
+  ========================================================= */
 
   const filteredPayments =
-    payments.filter((payment) => {
+    useMemo(() => {
       const search =
         searchTerm
-          .toLowerCase()
-          .trim();
+          .trim()
+          .toLowerCase();
 
-      if (!search) return true;
+      return payments.filter(payment => {
+        if (
+          statusFilter !== 'all' &&
+          payment.status !== statusFilter
+        ) {
+          return false;
+        }
 
-      const name =
-        payment.customers?.full_name
-          ?.toLowerCase() || '';
+        if (!search) {
+          return true;
+        }
 
-      const username =
-        payment.customers
-          ?.pppoe_username
-          ?.toLowerCase() || '';
+        const name =
+          payment.customers?.full_name
+            ?.toLowerCase() || '';
 
-      const serial =
-        payment.customers
-          ?.serial_number
-          ?.toLowerCase() || '';
+        const username =
+          payment.customers?.pppoe_username
+            ?.toLowerCase() || '';
 
-      const trx =
-        payment.transaction_id
-          ?.toLowerCase() || '';
+        const serial =
+          payment.customers?.serial_number
+            ?.toLowerCase() || '';
 
-      return (
-        name.includes(search) ||
-        username.includes(search) ||
-        serial.includes(search) ||
-        trx.includes(search)
-      );
-    });
+        const transaction =
+          payment.transaction_id
+            ?.toLowerCase() || '';
 
-  // =========================================================
-  // APPROVE PAYMENT
-  // =========================================================
+        return (
+          name.includes(search) ||
+          username.includes(search) ||
+          serial.includes(search) ||
+          transaction.includes(search)
+        );
+      });
+    }, [
+      payments,
+      searchTerm,
+      statusFilter
+    ]);
+
+  /* =========================================================
+     COUNTERS
+  ========================================================= */
+
+  const counters =
+    useMemo(() => {
+      return {
+        pending: payments.filter(
+          p => p.status === 'pending'
+        ).length,
+
+        approved: payments.filter(
+          p => p.status === 'approved'
+        ).length,
+
+        rejected: payments.filter(
+          p => p.status === 'rejected'
+        ).length
+      };
+    }, [payments]);
+
+  /* =========================================================
+     APPROVE PAYMENT
+  ========================================================= */
 
   const handleApprove = async (
     payment: PaymentType
@@ -222,17 +236,17 @@ export default function OnlinePaymentsPage() {
       payment.status !== 'pending'
     ) {
       alert(
-        'یہ payment پہلے ہی process ہو چکی ہے۔'
+        'یہ پیمنٹ پہلے ہی process ہو چکی ہے۔'
       );
+
       return;
     }
 
-    const confirmed =
-      confirm(
-        `کیا آپ Rs ${Number(
-          payment.amount
-        ).toLocaleString()} کی پیمنٹ منظور کرنا چاہتے ہیں؟\n\nTransaction ID: ${payment.transaction_id}`
-      );
+    const confirmed = window.confirm(
+      `کیا آپ Rs ${Number(
+        payment.amount
+      ).toLocaleString()} کی آن لائن پیمنٹ منظور کرنا چاہتے ہیں؟`
+    );
 
     if (!confirmed) return;
 
@@ -240,10 +254,12 @@ export default function OnlinePaymentsPage() {
     setErrorMessage('');
 
     try {
-      // -----------------------------------------------------
-      // STEP 1:
-      // تازہ payment status دوبارہ check کریں
-      // -----------------------------------------------------
+      /* =====================================================
+         STEP 1
+         RECHECK PAYMENT STATUS
+
+         Prevent accidental duplicate approval
+      ===================================================== */
 
       const {
         data: freshPayment,
@@ -254,7 +270,9 @@ export default function OnlinePaymentsPage() {
           id,
           status,
           amount,
-          customer_id
+          customer_id,
+          transaction_id,
+          payment_method
         `)
         .eq('id', payment.id)
         .single();
@@ -268,29 +286,18 @@ export default function OnlinePaymentsPage() {
         'pending'
       ) {
         throw new Error(
-          'یہ payment پہلے ہی کسی action کے ذریعے process ہو چکی ہے۔'
+          'یہ پیمنٹ پہلے ہی process ہو چکی ہے۔'
         );
       }
 
-      const paymentAmount =
-        Number(
-          freshPayment.amount || 0
-        );
-
-      if (paymentAmount <= 0) {
-        throw new Error(
-          'Payment amount درست نہیں ہے۔'
-        );
-      }
-
-      // -----------------------------------------------------
-      // STEP 2:
-      // LATEST COLLECTION
-      // -----------------------------------------------------
+      /* =====================================================
+         STEP 2
+         GET LATEST CUSTOMER BALANCE
+      ===================================================== */
 
       const {
-        data: latestCollections,
-        error: collectionFetchError
+        data: collectionData,
+        error: collectionError
       } = await supabase
         .from('collections')
         .select(`
@@ -306,88 +313,119 @@ export default function OnlinePaymentsPage() {
         })
         .limit(1);
 
-      if (collectionFetchError) {
-        throw collectionFetchError;
+      if (collectionError) {
+        throw collectionError;
       }
 
-      let currentDue = 0;
+      const monthlyPrice =
+        Number(
+          payment.customers?.monthly_price || 0
+        );
 
-      // اگر collection پہلے سے موجود ہے
-      if (
-        latestCollections &&
-        latestCollections.length > 0
-      ) {
-        currentDue =
-          Number(
-            latestCollections[0]
-              .remaining_balance || 0
-          );
-      } else {
-        // پہلی payment کی صورت میں
-        // Connection Charges + Monthly Bill
+      const connectionCharges =
+        Number(
+          payment.customers
+            ?.connection_charges || 0
+        );
 
-        const {
-          data: customerData,
-          error: customerError
-        } = await supabase
-          .from('customers')
-          .select(`
-            monthly_price,
-            connection_charges
-          `)
-          .eq(
-            'id',
-            payment.customer_id
-          )
-          .single();
+      /*
+        If previous collection exists,
+        use its remaining balance.
 
-        if (customerError) {
-          throw customerError;
-        }
+        Otherwise connection charges
+        can be initial arrears.
+      */
 
-        currentDue =
-          Number(
-            customerData
-              ?.connection_charges || 0
-          ) +
-          Number(
-            customerData
-              ?.monthly_price || 0
-          );
-      }
+      const previousArrears =
+        collectionData &&
+        collectionData.length > 0
+          ? Number(
+              collectionData[0]
+                .remaining_balance || 0
+            )
+          : connectionCharges;
 
-      // -----------------------------------------------------
-      // VALIDATE PAYMENT AGAINST CURRENT DUE
-      // -----------------------------------------------------
+      /*
+        Total due follows same accounting
+        model as Bill Collection.
+      */
 
-      if (currentDue <= 0) {
+      const totalDue =
+        Math.max(
+          0,
+          previousArrears
+        ) +
+        Math.max(
+          0,
+          monthlyPrice
+        );
+
+      const paymentAmount =
+        Number(payment.amount || 0);
+
+      if (paymentAmount <= 0) {
         throw new Error(
-          'اس صارف کا موجودہ بقایا صفر ہے۔ Payment approve نہیں کی گئی۔'
+          'Payment amount درست نہیں ہے۔'
         );
       }
 
-      if (
-        paymentAmount > currentDue
-      ) {
-        throw new Error(
-          `Payment رقم Rs ${paymentAmount.toLocaleString()} ہے جبکہ موجودہ بقایا Rs ${currentDue.toLocaleString()} ہے۔ پہلے ریکارڈ چیک کریں۔`
-        );
-      }
+      /*
+        Do not allow negative outstanding.
+        If user paid more than calculated
+        outstanding, remaining becomes zero.
+      */
 
       const newRemaining =
         Math.max(
           0,
-          currentDue -
+          totalDue -
             paymentAmount
         );
 
-      // -----------------------------------------------------
-      // STEP 3:
-      // COLLECTION INSERT
-      // -----------------------------------------------------
+      /* =====================================================
+         STEP 3
+         CHECK COLLECTION DUPLICATE
+
+         transaction_id is saved as receipt/reference
+      ===================================================== */
+
+      const transactionReference =
+        payment.transaction_id ||
+        `ONLINE-${payment.id}`;
 
       const {
-        error: collectionInsertError
+        data: existingCollection,
+        error: duplicateError
+      } = await supabase
+        .from('collections')
+        .select('id')
+        .eq(
+          'receipt_number',
+          transactionReference
+        )
+        .maybeSingle();
+
+      if (duplicateError) {
+        throw duplicateError;
+      }
+
+      if (existingCollection) {
+        throw new Error(
+          'اس Transaction کی collection پہلے سے موجود ہے۔'
+        );
+      }
+
+      /* =====================================================
+         STEP 4
+         INSERT INTO COLLECTIONS
+
+         IMPORTANT:
+         This is what makes Online Payment
+         appear inside Income Report.
+      ===================================================== */
+
+      const {
+        error: insertError
       } = await supabase
         .from('collections')
         .insert([
@@ -396,12 +434,13 @@ export default function OnlinePaymentsPage() {
               payment.customer_id,
 
             previous_arrears:
-              currentDue,
+              previousArrears,
 
-            current_bill: 0,
+            current_bill:
+              monthlyPrice,
 
             total_amount:
-              currentDue,
+              totalDue,
 
             paid_amount:
               paymentAmount,
@@ -410,115 +449,138 @@ export default function OnlinePaymentsPage() {
               newRemaining,
 
             payment_date:
-              new Date().toISOString()
+              new Date().toISOString(),
+
+            /*
+              Online bill payment is
+              monthly income.
+            */
+            income_category:
+              'monthly_charges',
+
+            /*
+              Accounting report knows
+              it came through online payment.
+            */
+            payment_method:
+              'online',
+
+            receipt_number:
+              transactionReference,
+
+            payment_note:
+              `Online payment approved. Method: ${
+                payment.payment_method ||
+                'Online'
+              }`
           }
         ]);
 
-      if (collectionInsertError) {
-        throw collectionInsertError;
+      if (insertError) {
+        throw insertError;
       }
 
-      // -----------------------------------------------------
-      // STEP 4:
-      // PAYMENT APPROVE
-      // -----------------------------------------------------
+      /* =====================================================
+         STEP 5
+         MARK ONLINE PAYMENT APPROVED
+      ===================================================== */
 
       const {
-        data: updatedPayment,
-        error: paymentUpdateError
+        error: approveError
       } = await supabase
         .from('online_payments')
         .update({
           status: 'approved'
         })
         .eq('id', payment.id)
-        .eq('status', 'pending')
-        .select('id')
-        .maybeSingle();
+        .eq('status', 'pending');
 
-      if (paymentUpdateError) {
-        throw paymentUpdateError;
+      if (approveError) {
+        throw approveError;
       }
 
-      if (!updatedPayment) {
-        throw new Error(
-          'Payment status update نہیں ہوا۔ ریکارڈ دوبارہ check کریں۔'
-        );
-      }
-
-      // -----------------------------------------------------
-      // STEP 5:
-      // WHATSAPP RECEIPT
-      // -----------------------------------------------------
+      /* =====================================================
+         STEP 6
+         WHATSAPP
+      ===================================================== */
 
       const targetPhone =
         payment.customers?.whatsapp ||
         payment.customers?.phone;
 
       if (targetPhone) {
-        const date =
-          new Date().toLocaleDateString(
-            'en-GB'
-          );
-
         const approvedMsg =
-          `🌐 *ONE CLICK | HAIDER FIBER NETWORK*\n` +
-          `━━━━━━━━━━━━━━━━━━\n` +
-          `✅ *PAYMENT CONFIRMED*\n\n` +
+`🌐 *ONE CLICK - HAIDER FIBER NETWORK* 🌐
 
-          `محترم *${payment.customers?.full_name || ''}*!\n\n` +
+✅ *آن لائن پیمنٹ منظور ہو گئی*
 
-          `آپ کی آن لائن پیمنٹ کامیابی سے تصدیق کر دی گئی ہے۔\n\n` +
+محترم *${payment.customers?.full_name || 'صارف'}*!
 
-          `👤 *اکاؤنٹ تفصیلات*\n` +
-          `▫️ HFN ID: ${payment.customers?.serial_number || '---'}\n` +
-          `▫️ PPPoE: ${payment.customers?.pppoe_username || '---'}\n\n` +
+آپ کی آن لائن بل ادائیگی کامیابی سے verify کر دی گئی ہے۔
 
-          `💳 *Payment Details*\n` +
-          `▫️ طریقہ: ${formatPaymentMethod(payment.payment_method)}\n` +
-          `▫️ Transaction ID: ${payment.transaction_id}\n` +
-          `✅ جمع رقم: Rs ${paymentAmount.toLocaleString()}\n` +
-          `🔻 بقیہ واجبات: Rs ${newRemaining.toLocaleString()}\n\n` +
+━━━━━━━━━━━━━━
+🧾 *Payment Details*
+━━━━━━━━━━━━━━
 
-          `📅 تاریخ: ${date}\n\n` +
+🆔 *Customer ID:* ${payment.customers?.serial_number || '-'}
 
-          `آپ کی ادائیگی کا شکریہ۔\n` +
-          `━━━━━━━━━━━━━━━━━━\n` +
-          `*Haider Fiber Network Team*\n` +
-          `Powered by *One Click*`;
+💳 *طریقہ ادائیگی:* ${payment.payment_method || 'Online'}
 
-        openWhatsAppDirect(
-          targetPhone,
-          approvedMsg
-        );
+🔖 *Transaction ID:* ${payment.transaction_id || '-'}
+
+💰 *منظور شدہ رقم:* Rs ${paymentAmount.toLocaleString()}
+
+🔻 *بقیہ واجبات:* Rs ${newRemaining.toLocaleString()}
+
+📌 *Status:* APPROVED
+
+━━━━━━━━━━━━━━
+
+آپ کی ادائیگی کا شکریہ ❤️
+
+*One Click*
+*Haider Fiber Network (SMC-Private) Limited*
+Your Network Solution`;
+
+        try {
+          openWhatsAppDirect(
+            targetPhone,
+            approvedMsg
+          );
+        } catch (whatsappError) {
+          console.error(
+            'WhatsApp Error:',
+            whatsappError
+          );
+        }
       }
 
-      alert(
-        `Payment منظور ہو گئی۔\nنیا بقایا: Rs ${newRemaining.toLocaleString()}`
-      );
-
       await fetchPayments();
+
     } catch (err: any) {
       console.error(
-        'Approve payment error:',
+        'Approve Payment Error:',
         err
+      );
+
+      setErrorMessage(
+        err?.message ||
+          'پیمنٹ approve نہیں ہو سکی۔'
       );
 
       alert(
         'خرابی: ' +
-          (
-            err?.message ||
-            'Payment approve نہیں ہو سکی۔'
-          )
+          (err?.message ||
+            'Unknown error')
       );
     } finally {
       setActionLoading(null);
     }
   };
 
-  // =========================================================
-  // REJECT PAYMENT
-  // =========================================================
+  /* =========================================================
+     REJECT PAYMENT
+  ========================================================= */
 
   const handleReject = async (
     payment: PaymentType
@@ -526,24 +588,20 @@ export default function OnlinePaymentsPage() {
     if (
       payment.status !== 'pending'
     ) {
-      alert(
-        'یہ payment پہلے ہی process ہو چکی ہے۔'
-      );
       return;
     }
 
-    const confirmed =
-      confirm(
-        `کیا آپ اس payment request کو Reject کرنا چاہتے ہیں؟\n\nTransaction ID: ${payment.transaction_id}`
-      );
+    const confirmed = window.confirm(
+      'کیا آپ اس آن لائن پیمنٹ کو Reject کرنا چاہتے ہیں؟'
+    );
 
     if (!confirmed) return;
 
     setActionLoading(payment.id);
+    setErrorMessage('');
 
     try {
       const {
-        data: updatedPayment,
         error
       } = await supabase
         .from('online_payments')
@@ -551,23 +609,15 @@ export default function OnlinePaymentsPage() {
           status: 'rejected'
         })
         .eq('id', payment.id)
-        .eq('status', 'pending')
-        .select('id')
-        .maybeSingle();
+        .eq('status', 'pending');
 
       if (error) {
         throw error;
       }
 
-      if (!updatedPayment) {
-        throw new Error(
-          'یہ payment پہلے ہی process ہو چکی ہے۔'
-        );
-      }
-
-      // -----------------------------------------------------
-      // WHATSAPP REJECT MESSAGE
-      // -----------------------------------------------------
+      /* =====================================================
+         WHATSAPP REJECTION
+      ===================================================== */
 
       const targetPhone =
         payment.customers?.whatsapp ||
@@ -575,55 +625,79 @@ export default function OnlinePaymentsPage() {
 
       if (targetPhone) {
         const rejectedMsg =
-          `🌐 *ONE CLICK | HAIDER FIBER NETWORK*\n` +
-          `━━━━━━━━━━━━━━━━━━\n` +
-          `❌ *PAYMENT NOT VERIFIED*\n\n` +
+`🌐 *ONE CLICK - HAIDER FIBER NETWORK* 🌐
 
-          `محترم *${payment.customers?.full_name || ''}*!\n\n` +
+❌ *آن لائن پیمنٹ Reject کر دی گئی*
 
-          `آپ کی آن لائن پیمنٹ کی تصدیق نہیں ہو سکی۔\n\n` +
+محترم *${payment.customers?.full_name || 'صارف'}*!
 
-          `▫️ HFN ID: ${payment.customers?.serial_number || '---'}\n` +
-          `▫️ Transaction ID: ${payment.transaction_id}\n` +
-          `▫️ طریقہ ادائیگی: ${formatPaymentMethod(payment.payment_method)}\n` +
-          `▫️ رقم: Rs ${Number(payment.amount).toLocaleString()}\n\n` +
+آپ کی بھیجی گئی آن لائن پیمنٹ verify نہیں ہو سکی۔
 
-          `براہِ کرم Transaction ID اور رسید دوبارہ چیک کریں اور درست معلومات کے ساتھ دوبارہ Payment Request بھیجیں۔\n\n` +
+━━━━━━━━━━━━━━
 
-          `ضرورت کی صورت میں ایڈمن سے رابطہ کریں۔\n\n` +
+🔖 *Transaction ID:* ${payment.transaction_id || '-'}
 
-          `━━━━━━━━━━━━━━━━━━\n` +
-          `*Haider Fiber Network Team*\n` +
-          `Powered by *One Click*`;
+💰 *رقم:* Rs ${Number(
+          payment.amount || 0
+        ).toLocaleString()}
 
-        openWhatsAppDirect(
-          targetPhone,
-          rejectedMsg
-        );
+📌 *Status:* REJECTED
+
+━━━━━━━━━━━━━━
+
+براہِ کرم Transaction ID اور رسید دوبارہ چیک کریں اور ضرورت پڑنے پر نئی Payment Request بھیجیں۔
+
+*One Click*
+*Haider Fiber Network (SMC-Private) Limited*
+Your Network Solution`;
+
+        try {
+          openWhatsAppDirect(
+            targetPhone,
+            rejectedMsg
+          );
+        } catch (whatsappError) {
+          console.error(
+            'WhatsApp Error:',
+            whatsappError
+          );
+        }
       }
 
       await fetchPayments();
+
     } catch (err: any) {
       console.error(
-        'Reject error:',
+        'Reject Error:',
         err
       );
 
-      alert(
-        'منسوخ کرنے میں خرابی: ' +
-          (
-            err?.message ||
-            'Unknown error'
-          )
+      setErrorMessage(
+        err?.message ||
+          'Payment reject نہیں ہو سکی۔'
       );
     } finally {
       setActionLoading(null);
     }
   };
 
-  // =========================================================
-  // UI
-  // =========================================================
+  /* =========================================================
+     DATE FORMAT
+  ========================================================= */
+
+  const formatDate = (
+    date?: string
+  ) => {
+    if (!date) return '-';
+
+    return new Date(
+      date
+    ).toLocaleString('en-GB');
+  };
+
+  /* =========================================================
+     UI
+  ========================================================= */
 
   return (
     <Layout showNavButtons={true}>
@@ -632,107 +706,64 @@ export default function OnlinePaymentsPage() {
           display: 'flex',
           flexDirection: 'column',
           gap: '14px',
-          width: '100%'
+          width: '100%',
+          maxWidth: '1400px',
+          margin: '0 auto'
         }}
       >
+
         {/* HEADER */}
 
         <div
           style={{
-            display: 'flex',
-            justifyContent:
-              'space-between',
-            alignItems: 'center',
             background:
-              'linear-gradient(135deg,#10253e,#0b1e33)',
-            padding: '14px 16px',
-            borderRadius: '14px',
-            border:
-              '1px solid #3b82f6'
+              'linear-gradient(135deg,#081a2c,#0b2035 55%,#09283a)',
+            border: '1px solid #164e63',
+            padding: '16px',
+            borderRadius: '17px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '11px'
           }}
         >
           <div
             style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: '13px',
+              background:
+                'rgba(59,130,246,.15)',
+              color: '#60a5fa',
               display: 'flex',
               alignItems: 'center',
-              gap: '10px'
+              justifyContent: 'center'
             }}
           >
-            <div
+            <Globe size={23} />
+          </div>
+
+          <div>
+            <h2
               style={{
-                backgroundColor:
-                  'rgba(59,130,246,0.18)',
-                padding: '9px',
-                borderRadius: '10px',
-                color: '#60a5fa'
+                margin: 0,
+                fontSize: '17px',
+                color: '#f8fafc',
+                fontWeight: '800'
               }}
             >
-              <Globe size={21} />
-            </div>
+              آن لائن پیمنٹ ویریفیکیشن
+            </h2>
 
-            <div>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: '16px',
-                  fontWeight: '900',
-                  color: '#ffffff'
-                }}
-              >
-                آن لائن پیمنٹ ویریفیکیشن
-              </h2>
-
-              <p
-                style={{
-                  margin: '3px 0 0',
-                  fontSize: '10px',
-                  color: '#93c5fd'
-                }}
-              >
-                One Click • Haider Fiber
-                Network
-              </p>
-            </div>
+            <p
+              style={{
+                margin: '3px 0 0',
+                color: '#64748b',
+                fontSize: '10px'
+              }}
+            >
+              Online Payments • One Click
+            </p>
           </div>
-        </div>
-
-        {/* ANALYTICS */}
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns:
-              'repeat(auto-fit,minmax(140px,1fr))',
-            gap: '9px'
-          }}
-        >
-          <StatusCard
-            title="Pending"
-            value={`${pendingCount}`}
-            subtitle={`Rs ${pendingAmount.toLocaleString()}`}
-            color="#f59e0b"
-            icon={<Clock size={17} />}
-          />
-
-          <StatusCard
-            title="Approved"
-            value={`${approvedCount}`}
-            subtitle="Verified Payments"
-            color="#10b981"
-            icon={
-              <CheckCircle2 size={17} />
-            }
-          />
-
-          <StatusCard
-            title="Rejected"
-            value={`${rejectedCount}`}
-            subtitle="Rejected Requests"
-            color="#ef4444"
-            icon={
-              <XCircle size={17} />
-            }
-          />
         </div>
 
         {/* ERROR */}
@@ -740,38 +771,68 @@ export default function OnlinePaymentsPage() {
         {errorMessage && (
           <div
             style={{
-              backgroundColor:
-                'rgba(239,68,68,0.15)',
+              background:
+                'rgba(239,68,68,.10)',
               border:
-                '1px solid #ef4444',
+                '1px solid rgba(239,68,68,.45)',
               color: '#f87171',
               padding: '11px',
               borderRadius: '10px',
-              fontSize: '12px',
               display: 'flex',
+              gap: '7px',
               alignItems: 'center',
-              gap: '7px'
+              fontSize: '11px'
             }}
           >
-            <AlertCircle size={16} />
+            <AlertCircle size={15} />
             {errorMessage}
           </div>
         )}
 
-        {/* SEARCH */}
+        {/* COUNTERS */}
 
         <div
           style={{
-            backgroundColor: '#1c2541',
-            borderRadius: '14px',
-            padding: '12px',
-            border:
-              '1px solid #334155',
+            display: 'grid',
+            gridTemplateColumns:
+              'repeat(auto-fit,minmax(150px,1fr))',
+            gap: '9px'
+          }}
+        >
+          <CounterCard
+            title="Pending"
+            value={counters.pending}
+            color="#fbbf24"
+            icon={<Clock size={18} />}
+          />
+
+          <CounterCard
+            title="Approved"
+            value={counters.approved}
+            color="#34d399"
+            icon={
+              <CheckCircle2 size={18} />
+            }
+          />
+
+          <CounterCard
+            title="Rejected"
+            value={counters.rejected}
+            color="#f87171"
+            icon={<XCircle size={18} />}
+          />
+        </div>
+
+        {/* FILTER */}
+
+        <div
+          style={{
+            background: '#0b1b2e',
+            border: '1px solid #183a55',
+            borderRadius: '13px',
+            padding: '11px',
             display: 'flex',
-            justifyContent:
-              'space-between',
-            alignItems: 'center',
-            gap: '10px',
+            gap: '8px',
             flexWrap: 'wrap'
           }}
         >
@@ -784,9 +845,9 @@ export default function OnlinePaymentsPage() {
           >
             <input
               type="text"
-              placeholder="نام، HFN ID، PPPoE یا Transaction ID..."
+              placeholder="نام، Customer ID، Username یا Transaction..."
               value={searchTerm}
-              onChange={(e) =>
+              onChange={e =>
                 setSearchTerm(
                   e.target.value
                 )
@@ -794,15 +855,15 @@ export default function OnlinePaymentsPage() {
               style={{
                 width: '100%',
                 boxSizing: 'border-box',
-                backgroundColor:
-                  '#0f172a',
+                background: '#071525',
                 border:
-                  '1px solid #3b82f6',
+                  '1px solid #1e4663',
                 color: '#ffffff',
+                borderRadius: '9px',
                 padding:
-                  '9px 38px 9px 10px',
-                borderRadius: '8px',
-                fontSize: '12px'
+                  '9px 34px 9px 10px',
+                fontSize: '11px',
+                outline: 'none'
               }}
             />
 
@@ -810,31 +871,63 @@ export default function OnlinePaymentsPage() {
               size={14}
               style={{
                 position: 'absolute',
-                right: '11px',
-                top: '11px',
-                color: '#38bdf8'
+                right: '10px',
+                top: '10px',
+                color: '#64748b'
               }}
             />
           </div>
 
+          <select
+            value={statusFilter}
+            onChange={e =>
+              setStatusFilter(
+                e.target.value as any
+              )
+            }
+            style={{
+              background: '#071525',
+              border:
+                '1px solid #1e4663',
+              color: '#ffffff',
+              borderRadius: '9px',
+              padding: '9px 10px',
+              fontSize: '11px'
+            }}
+          >
+            <option value="pending">
+              Pending
+            </option>
+
+            <option value="approved">
+              Approved
+            </option>
+
+            <option value="rejected">
+              Rejected
+            </option>
+
+            <option value="all">
+              All
+            </option>
+          </select>
+
           <button
             type="button"
             onClick={fetchPayments}
-            disabled={fetching}
             style={{
-              backgroundColor:
-                '#0f172a',
-              color: '#38bdf8',
+              background: '#071525',
               border:
-                '1px solid #334155',
-              padding: '9px 14px',
-              borderRadius: '8px',
+                '1px solid #1e4663',
+              color: '#38bdf8',
+              padding: '9px 13px',
+              borderRadius: '9px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '5px',
               fontSize: '11px',
-              fontWeight: 'bold'
+              fontWeight: '700'
             }}
           >
             <RefreshCw
@@ -846,7 +939,7 @@ export default function OnlinePaymentsPage() {
               }
             />
 
-            ریفریش
+            Refresh
           </button>
         </div>
 
@@ -854,14 +947,13 @@ export default function OnlinePaymentsPage() {
 
         <div
           style={{
-            backgroundColor: '#1c2541',
-            borderRadius: '14px',
-            padding: '12px',
+            background:
+              'linear-gradient(145deg,#0b1b2e,#0b2034)',
             border:
-              '1px solid #334155',
-            overflowX: 'auto',
-            WebkitOverflowScrolling:
-              'touch'
+              '1px solid #183a55',
+            borderRadius: '15px',
+            padding: '12px',
+            overflowX: 'auto'
           }}
         >
           {fetching ? (
@@ -869,31 +961,20 @@ export default function OnlinePaymentsPage() {
               style={{
                 padding: '30px',
                 textAlign: 'center',
-                color: '#38bdf8'
+                color: '#22d3ee'
               }}
             >
               <Loader2
                 size={22}
                 className="animate-spin"
               />
-
-              <div
-                style={{
-                  marginTop: '8px',
-                  fontSize: '12px'
-                }}
-              >
-                Online Payments لوڈ ہو
-                رہی ہیں...
-              </div>
             </div>
           ) : (
             <table
               style={{
                 width: '100%',
-                minWidth: '1000px',
-                borderCollapse:
-                  'collapse',
+                minWidth: '950px',
+                borderCollapse: 'collapse',
                 textAlign: 'right',
                 fontSize: '11px'
               }}
@@ -901,54 +982,19 @@ export default function OnlinePaymentsPage() {
               <thead>
                 <tr
                   style={{
-                    backgroundColor:
-                      '#0f172a',
-                    borderBottom:
-                      '1px solid #334155',
+                    background: '#071525',
                     color: '#94a3b8'
                   }}
                 >
-                  <th style={thStyle}>
-                    #
-                  </th>
-
-                  <th style={thStyle}>
-                    صارف
-                  </th>
-
-                  <th style={thStyle}>
-                    طریقہ
-                  </th>
-
-                  <th style={thStyle}>
-                    Transaction ID
-                  </th>
-
-                  <th style={thStyle}>
-                    رقم
-                  </th>
-
-                  <th style={thStyle}>
-                    رسید
-                  </th>
-
-                  <th
-                    style={{
-                      ...thStyle,
-                      textAlign: 'center'
-                    }}
-                  >
-                    Status
-                  </th>
-
-                  <th
-                    style={{
-                      ...thStyle,
-                      textAlign: 'center'
-                    }}
-                  >
-                    Action
-                  </th>
+                  <th style={thStyle}>#</th>
+                  <th style={thStyle}>صارف</th>
+                  <th style={thStyle}>تاریخ</th>
+                  <th style={thStyle}>Method</th>
+                  <th style={thStyle}>Transaction ID</th>
+                  <th style={thStyle}>Receipt</th>
+                  <th style={thStyle}>Amount</th>
+                  <th style={thStyle}>Status</th>
+                  <th style={thStyle}>Action</th>
                 </tr>
               </thead>
 
@@ -957,301 +1003,189 @@ export default function OnlinePaymentsPage() {
                 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       style={{
-                        textAlign:
-                          'center',
-                        padding: '20px',
+                        padding: '25px',
+                        textAlign: 'center',
                         color: '#64748b'
                       }}
                     >
-                      کوئی Online Payment
-                      Request موجود نہیں۔
+                      کوئی payment موجود نہیں۔
                     </td>
                   </tr>
                 ) : (
                   filteredPayments.map(
-                    (pay, index) => (
+                    (payment, index) => (
                       <tr
-                        key={pay.id}
+                        key={payment.id}
                         style={{
                           borderBottom:
-                            '1px solid #1e293b'
+                            '1px solid #14283c'
                         }}
                       >
-                        <td
-                          style={tdStyle}
-                        >
+                        <td style={tdStyle}>
                           {index + 1}
                         </td>
 
-                        {/* CUSTOMER */}
-
-                        <td
-                          style={tdStyle}
-                        >
+                        <td style={tdStyle}>
                           <div
                             style={{
-                              display:
-                                'flex',
-                              gap: '7px',
-                              alignItems:
-                                'center'
+                              color: '#ffffff',
+                              fontWeight: '800'
                             }}
                           >
-                            <User
-                              size={14}
-                              color="#60a5fa"
-                            />
+                            {payment.customers
+                              ?.full_name ||
+                              'Unknown'}
+                          </div>
 
-                            <div>
-                              <div
-                                style={{
-                                  color:
-                                    '#ffffff',
-                                  fontWeight:
-                                    'bold'
-                                }}
-                              >
-                                {pay
-                                  .customers
-                                  ?.full_name ||
-                                  'نامعلوم'}
-                              </div>
-
-                              <div
-                                style={{
-                                  color:
-                                    '#38bdf8',
-                                  fontSize:
-                                    '9px',
-                                  marginTop:
-                                    '2px'
-                                }}
-                              >
-                                HFN:{' '}
-                                {pay
-                                  .customers
-                                  ?.serial_number ||
-                                  '---'}
-                              </div>
-
-                              <div
-                                style={{
-                                  color:
-                                    '#64748b',
-                                  fontSize:
-                                    '9px',
-                                  direction:
-                                    'ltr'
-                                }}
-                              >
-                                {pay
-                                  .customers
-                                  ?.pppoe_username ||
-                                  '---'}
-                              </div>
-                            </div>
+                          <div
+                            style={{
+                              color: '#38bdf8',
+                              fontSize: '9px'
+                            }}
+                          >
+                            {payment.customers
+                              ?.serial_number ||
+                              payment.customers
+                                ?.pppoe_username ||
+                              '-'}
                           </div>
                         </td>
 
-                        {/* METHOD */}
+                        <td style={tdStyle}>
+                          {formatDate(
+                            payment.created_at
+                          )}
+                        </td>
 
-                        <td
-                          style={tdStyle}
-                        >
+                        <td style={tdStyle}>
                           <span
                             style={{
-                              backgroundColor:
-                                '#0f172a',
-                              padding:
-                                '4px 7px',
-                              borderRadius:
-                                '5px',
-                              border:
-                                '1px solid #334155',
-                              color:
-                                '#cbd5e1'
+                              color: '#c4b5fd'
                             }}
                           >
-                            {formatPaymentMethod(
-                              pay.payment_method
-                            )}
+                            {payment.payment_method ||
+                              'Online'}
                           </span>
                         </td>
 
-                        {/* TRANSACTION */}
-
                         <td
                           style={{
                             ...tdStyle,
-                            color:
-                              '#f472b6',
-                            fontWeight:
-                              'bold',
-                            direction:
-                              'ltr'
+                            color: '#f472b6',
+                            direction: 'ltr'
                           }}
                         >
-                          {
-                            pay.transaction_id
-                          }
+                          {payment.transaction_id ||
+                            '-'}
                         </td>
 
-                        {/* AMOUNT */}
-
-                        <td
-                          style={{
-                            ...tdStyle,
-                            color:
-                              '#34d399',
-                            fontWeight:
-                              '900'
-                          }}
-                        >
-                          Rs{' '}
-                          {Number(
-                            pay.amount
-                          ).toLocaleString()}
-                        </td>
-
-                        {/* RECEIPT */}
-
-                        <td
-                          style={tdStyle}
-                        >
-                          {pay.receipt_url ? (
+                        <td style={tdStyle}>
+                          {payment.receipt_url ? (
                             <button
                               type="button"
                               onClick={() =>
                                 setSelectedReceipt(
-                                  pay.receipt_url ||
+                                  payment.receipt_url ||
                                     null
                                 )
                               }
                               style={{
-                                backgroundColor:
-                                  'rgba(59,130,246,0.15)',
-                                color:
-                                  '#60a5fa',
+                                background:
+                                  'rgba(59,130,246,.12)',
                                 border:
-                                  '1px solid rgba(59,130,246,0.4)',
-                                padding:
-                                  '5px 8px',
-                                borderRadius:
-                                  '6px',
-                                cursor:
-                                  'pointer',
-                                display:
-                                  'inline-flex',
-                                alignItems:
-                                  'center',
+                                  '1px solid rgba(59,130,246,.30)',
+                                color: '#60a5fa',
+                                padding: '5px 8px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
                                 gap: '4px',
-                                fontSize:
-                                  '10px'
+                                fontSize: '9px'
                               }}
                             >
-                              <Eye
-                                size={11}
-                              />
-                              دیکھیں
+                              <Eye size={11} />
+                              View
                             </button>
                           ) : (
-                            <span
-                              style={{
-                                color:
-                                  '#64748b'
-                              }}
-                            >
-                              نہیں
-                            </span>
+                            '-'
                           )}
                         </td>
-
-                        {/* STATUS */}
 
                         <td
                           style={{
                             ...tdStyle,
-                            textAlign:
-                              'center'
+                            color: '#34d399',
+                            fontWeight: '900'
                           }}
                         >
-                          <PaymentStatus
+                          Rs{' '}
+                          {Number(
+                            payment.amount || 0
+                          ).toLocaleString()}
+                        </td>
+
+                        <td style={tdStyle}>
+                          <StatusBadge
                             status={
-                              pay.status
+                              payment.status
                             }
                           />
                         </td>
 
-                        {/* ACTION */}
-
-                        <td
-                          style={{
-                            ...tdStyle,
-                            textAlign:
-                              'center'
-                          }}
-                        >
-                          {pay.status ===
+                        <td style={tdStyle}>
+                          {payment.status ===
                           'pending' ? (
                             <div
                               style={{
-                                display:
-                                  'flex',
-                                justifyContent:
-                                  'center',
+                                display: 'flex',
                                 gap: '5px'
                               }}
                             >
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleApprove(
-                                    pay
-                                  )
-                                }
                                 disabled={
                                   actionLoading ===
-                                  pay.id
+                                  payment.id
+                                }
+                                onClick={() =>
+                                  handleApprove(
+                                    payment
+                                  )
                                 }
                                 style={{
-                                  backgroundColor:
-                                    '#10b981',
-                                  color:
-                                    '#ffffff',
-                                  border:
-                                    'none',
-                                  padding:
-                                    '6px 9px',
+                                  background:
+                                    '#059669',
+                                  color: '#ffffff',
+                                  border: 'none',
                                   borderRadius:
                                     '6px',
+                                  padding:
+                                    '6px 8px',
+                                  fontSize:
+                                    '9px',
+                                  fontWeight:
+                                    '800',
                                   cursor:
                                     'pointer',
-                                  fontSize:
-                                    '10px',
-                                  fontWeight:
-                                    'bold',
                                   display:
                                     'flex',
                                   alignItems:
                                     'center',
-                                  gap: '3px'
+                                  gap: '4px'
                                 }}
                               >
                                 {actionLoading ===
-                                pay.id ? (
+                                payment.id ? (
                                   <Loader2
-                                    size={
-                                      11
-                                    }
+                                    size={11}
                                     className="animate-spin"
                                   />
                                 ) : (
                                   <CheckCircle2
-                                    size={
-                                      12
-                                    }
+                                    size={11}
                                   />
                                 )}
 
@@ -1260,53 +1194,51 @@ export default function OnlinePaymentsPage() {
 
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleReject(
-                                    pay
-                                  )
-                                }
                                 disabled={
                                   actionLoading ===
-                                  pay.id
+                                  payment.id
+                                }
+                                onClick={() =>
+                                  handleReject(
+                                    payment
+                                  )
                                 }
                                 style={{
-                                  backgroundColor:
-                                    'rgba(239,68,68,0.15)',
-                                  color:
-                                    '#f87171',
+                                  background:
+                                    'rgba(239,68,68,.12)',
+                                  color: '#f87171',
                                   border:
-                                    '1px solid rgba(239,68,68,0.4)',
-                                  padding:
-                                    '6px 9px',
+                                    '1px solid rgba(239,68,68,.35)',
                                   borderRadius:
                                     '6px',
+                                  padding:
+                                    '6px 8px',
+                                  fontSize:
+                                    '9px',
                                   cursor:
                                     'pointer',
-                                  fontSize:
-                                    '10px',
                                   display:
                                     'flex',
                                   alignItems:
                                     'center',
-                                  gap: '3px'
+                                  gap: '4px'
                                 }}
                               >
                                 <XCircle
-                                  size={12}
+                                  size={11}
                                 />
+
                                 Reject
                               </button>
                             </div>
                           ) : (
                             <span
                               style={{
-                                fontSize:
-                                  '10px',
-                                color:
-                                  '#64748b'
+                                color: '#64748b',
+                                fontSize: '9px'
                               }}
                             >
-                              مکمل
+                              Completed
                             </span>
                           )}
                         </td>
@@ -1329,9 +1261,9 @@ export default function OnlinePaymentsPage() {
             style={{
               position: 'fixed',
               inset: 0,
-              backgroundColor:
-                'rgba(0,0,0,0.80)',
               zIndex: 9999,
+              background:
+                'rgba(0,0,0,.80)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -1339,18 +1271,17 @@ export default function OnlinePaymentsPage() {
             }}
           >
             <div
-              onClick={(e) =>
+              onClick={e =>
                 e.stopPropagation()
               }
               style={{
                 width: '100%',
-                maxWidth: '550px',
-                backgroundColor:
-                  '#0f172a',
+                maxWidth: '600px',
+                background: '#0b1b2e',
                 border:
-                  '1px solid #334155',
-                borderRadius: '14px',
-                padding: '14px'
+                  '1px solid #164e63',
+                borderRadius: '16px',
+                padding: '12px'
               }}
             >
               <div
@@ -1364,18 +1295,15 @@ export default function OnlinePaymentsPage() {
               >
                 <div
                   style={{
-                    display: 'flex',
-                    alignItems:
-                      'center',
-                    gap: '6px',
                     color: '#ffffff',
-                    fontWeight: 'bold',
-                    fontSize: '13px'
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
                   }}
                 >
-                  <Receipt
-                    size={16}
-                  />
+                  <Receipt size={14} />
                   Payment Receipt
                 </div>
 
@@ -1387,18 +1315,17 @@ export default function OnlinePaymentsPage() {
                     )
                   }
                   style={{
-                    backgroundColor:
-                      '#ef4444',
-                    color: '#ffffff',
-                    border: 'none',
-                    width: '28px',
-                    height: '28px',
-                    borderRadius:
-                      '50%',
+                    background:
+                      'rgba(239,68,68,.15)',
+                    border:
+                      '1px solid rgba(239,68,68,.30)',
+                    color: '#f87171',
+                    borderRadius: '7px',
+                    padding: '5px 8px',
                     cursor: 'pointer'
                   }}
                 >
-                  ×
+                  <XCircle size={15} />
                 </button>
               </div>
 
@@ -1409,7 +1336,8 @@ export default function OnlinePaymentsPage() {
                   width: '100%',
                   maxHeight: '70vh',
                   objectFit: 'contain',
-                  borderRadius: '8px'
+                  borderRadius: '10px',
+                  background: '#ffffff'
                 }}
               />
             </div>
@@ -1420,58 +1348,100 @@ export default function OnlinePaymentsPage() {
   );
 }
 
-// ===========================================================
-// HELPERS
-// ===========================================================
+/* =========================================================
+   COUNTER CARD
+========================================================= */
 
-function formatPaymentMethod(
-  method: string
-) {
-  switch (method) {
-    case 'easypaisa':
-      return 'Easypaisa';
+function CounterCard({
+  title,
+  value,
+  color,
+  icon
+}: {
+  title: string;
+  value: number;
+  color: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        background: '#0b1b2e',
+        border: '1px solid #183a55',
+        borderRadius: '11px',
+        padding: '10px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      }}
+    >
+      <div
+        style={{
+          width: '34px',
+          height: '34px',
+          borderRadius: '9px',
+          background: `${color}18`,
+          color,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        {icon}
+      </div>
 
-    case 'jazzcash':
-      return 'JazzCash';
+      <div>
+        <div
+          style={{
+            color: '#64748b',
+            fontSize: '9px'
+          }}
+        >
+          {title}
+        </div>
 
-    case 'raast':
-      return 'Raast ID';
-
-    case 'bank':
-      return 'Bank Transfer';
-
-    default:
-      return method || 'Unknown';
-  }
+        <div
+          style={{
+            color,
+            fontSize: '16px',
+            fontWeight: '900'
+          }}
+        >
+          {value}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function PaymentStatus({
+/* =========================================================
+   STATUS
+========================================================= */
+
+function StatusBadge({
   status
 }: {
-  status:
-    | 'pending'
-    | 'approved'
-    | 'rejected';
+  status: PaymentType['status'];
 }) {
   if (status === 'approved') {
     return (
       <span
         style={{
-          backgroundColor:
-            'rgba(16,185,129,0.15)',
           color: '#34d399',
+          background:
+            'rgba(16,185,129,.12)',
           border:
-            '1px solid rgba(16,185,129,0.4)',
-          padding: '4px 8px',
+            '1px solid rgba(16,185,129,.30)',
+          padding: '3px 7px',
           borderRadius: '10px',
-          fontSize: '10px',
+          fontSize: '9px',
           display: 'inline-flex',
           alignItems: 'center',
           gap: '3px'
         }}
       >
         <CheckCircle2 size={10} />
-        منظور شدہ
+        Approved
       </span>
     );
   }
@@ -1480,21 +1450,21 @@ function PaymentStatus({
     return (
       <span
         style={{
-          backgroundColor:
-            'rgba(239,68,68,0.15)',
           color: '#f87171',
+          background:
+            'rgba(239,68,68,.12)',
           border:
-            '1px solid rgba(239,68,68,0.4)',
-          padding: '4px 8px',
+            '1px solid rgba(239,68,68,.30)',
+          padding: '3px 7px',
           borderRadius: '10px',
-          fontSize: '10px',
+          fontSize: '9px',
           display: 'inline-flex',
           alignItems: 'center',
           gap: '3px'
         }}
       >
         <XCircle size={10} />
-        منسوخ
+        Rejected
       </span>
     );
   }
@@ -1502,14 +1472,14 @@ function PaymentStatus({
   return (
     <span
       style={{
-        backgroundColor:
-          'rgba(245,158,11,0.15)',
         color: '#fbbf24',
+        background:
+          'rgba(245,158,11,.12)',
         border:
-          '1px solid rgba(245,158,11,0.4)',
-        padding: '4px 8px',
+          '1px solid rgba(245,158,11,.30)',
+        padding: '3px 7px',
         borderRadius: '10px',
-        fontSize: '10px',
+        fontSize: '9px',
         display: 'inline-flex',
         alignItems: 'center',
         gap: '3px'
@@ -1521,80 +1491,13 @@ function PaymentStatus({
   );
 }
 
-function StatusCard({
-  title,
-  value,
-  subtitle,
-  color,
-  icon
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-  color: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        backgroundColor: '#1c2541',
-        border: `1px solid ${color}`,
-        borderRadius: '11px',
-        padding: '10px 12px',
-        display: 'flex',
-        justifyContent:
-          'space-between',
-        alignItems: 'center'
-      }}
-    >
-      <div>
-        <div
-          style={{
-            color,
-            fontSize: '10px',
-            fontWeight: 'bold'
-          }}
-        >
-          {title}
-        </div>
-
-        <div
-          style={{
-            color: '#ffffff',
-            fontSize: '17px',
-            fontWeight: '900',
-            marginTop: '2px'
-          }}
-        >
-          {value}
-        </div>
-
-        <div
-          style={{
-            color: '#64748b',
-            fontSize: '9px'
-          }}
-        >
-          {subtitle}
-        </div>
-      </div>
-
-      <div style={{ color }}>
-        {icon}
-      </div>
-    </div>
-  );
-}
-
-const thStyle:
-  React.CSSProperties = {
-  padding: '9px 8px',
+const thStyle: React.CSSProperties = {
+  padding: '9px',
   whiteSpace: 'nowrap'
 };
 
-const tdStyle:
-  React.CSSProperties = {
-  padding: '9px 8px',
+const tdStyle: React.CSSProperties = {
+  padding: '9px',
   color: '#cbd5e1',
   whiteSpace: 'nowrap'
 };
