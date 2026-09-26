@@ -20,7 +20,8 @@ import {
   Loader2,
   Gauge,
   DollarSign,
-  Package
+  Package,
+  RefreshCw
 } from 'lucide-react';
 
 /* =========================
@@ -82,10 +83,139 @@ export default function NewConnection() {
     useState<PackageType[]>([]);
 
   const [loading, setLoading] = useState(false);
-  const [packagesLoading, setPackagesLoading] = useState(true);
+  const [packagesLoading, setPackagesLoading] =
+    useState(true);
 
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [serialLoading, setSerialLoading] =
+    useState(false);
+
+  const [isSubmitted, setIsSubmitted] =
+    useState(false);
+
+  const [errorMessage, setErrorMessage] =
+    useState('');
+
+  /* =========================================================
+     FORMAT SERIAL NUMBER
+
+     HFN1    -> HFN0001
+     HFN50   -> HFN0050
+     HFN0050 -> HFN0050
+  ========================================================= */
+
+  const formatSerialNumber = (
+    value: string
+  ): string => {
+    const cleanValue = value
+      .toUpperCase()
+      .replace(/\s+/g, '');
+
+    const match = cleanValue.match(/^HFN(\d+)$/);
+
+    if (!match) {
+      return cleanValue;
+    }
+
+    const number = parseInt(match[1], 10);
+
+    if (!number || number < 1) {
+      return cleanValue;
+    }
+
+    return `HFN${String(number).padStart(4, '0')}`;
+  };
+
+  /* =========================================================
+     GET FIRST AVAILABLE / MISSING SERIAL
+
+     Example:
+
+     Existing:
+     HFN0001
+     HFN0002
+     HFN0004
+
+     Auto:
+     HFN0003
+
+     If no gap:
+     HFN0005
+  ========================================================= */
+
+  const getNextAvailableSerial =
+    async (): Promise<string> => {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('serial_number')
+        .like('serial_number', 'HFN%');
+
+      if (error) {
+        throw new Error(
+          `Serial Number Error: ${error.message}`
+        );
+      }
+
+      const usedNumbers = new Set<number>();
+
+      (data || []).forEach((customer: any) => {
+        const serial = String(
+          customer.serial_number || ''
+        )
+          .trim()
+          .toUpperCase();
+
+        const match = serial.match(/^HFN(\d+)$/);
+
+        if (match) {
+          const number = parseInt(match[1], 10);
+
+          if (number > 0) {
+            usedNumbers.add(number);
+          }
+        }
+      });
+
+      let nextNumber = 1;
+
+      while (usedNumbers.has(nextNumber)) {
+        nextNumber++;
+      }
+
+      return `HFN${String(nextNumber).padStart(
+        4,
+        '0'
+      )}`;
+    };
+
+  /* =========================================================
+     AUTO SERIAL
+  ========================================================= */
+
+  const generateAutoSerial = async () => {
+    setSerialLoading(true);
+
+    try {
+      const nextSerial =
+        await getNextAvailableSerial();
+
+      setFormData(prev => ({
+        ...prev,
+        serialNumber: nextSerial
+      }));
+    } catch (err: any) {
+      console.error(
+        'Auto Serial Error:',
+        err
+      );
+
+      setErrorMessage(
+        err?.message ||
+          'سیریل نمبر بنانے میں خرابی پیش آئی۔'
+      );
+    } finally {
+      setSerialLoading(false);
+    }
+  };
 
   /* =========================================================
      LOAD SERIAL NUMBER + PACKAGES
@@ -93,50 +223,16 @@ export default function NewConnection() {
 
   const loadInitialData = async () => {
     setPackagesLoading(true);
+    setSerialLoading(true);
+    setErrorMessage('');
 
     try {
       /* =========================
-         1. NEXT SERIAL NUMBER
-         HFN0001, HFN0002...
+         1. FIRST AVAILABLE SERIAL
       ========================= */
 
-      const { data: customerData, error: customerError } =
-        await supabase
-          .from('customers')
-          .select('serial_number')
-          .like('serial_number', 'HFN%');
-
-      if (customerError) {
-        console.error(
-          'Serial Number Error:',
-          customerError.message
-        );
-      }
-
-      let highestNumber = 0;
-
-      if (customerData && customerData.length > 0) {
-        customerData.forEach((customer: any) => {
-          const serial = String(
-            customer.serial_number || ''
-          ).toUpperCase();
-
-          const match = serial.match(/^HFN(\d+)$/);
-
-          if (match) {
-            const number = parseInt(match[1], 10);
-
-            if (number > highestNumber) {
-              highestNumber = number;
-            }
-          }
-        });
-      }
-
-      const nextNumber = highestNumber + 1;
-
       const nextSerial =
-        `HFN${String(nextNumber).padStart(4, '0')}`;
+        await getNextAvailableSerial();
 
       setFormData(prev => ({
         ...prev,
@@ -145,12 +241,6 @@ export default function NewConnection() {
 
       /* =========================
          2. LOAD PACKAGES
-
-         Supabase packages columns:
-         id
-         name
-         speed
-         price
       ========================= */
 
       const { data: pkgData, error: pkgError } =
@@ -182,7 +272,10 @@ export default function NewConnection() {
         setPackagesList(cleanPackages);
       }
     } catch (err: any) {
-      console.error('Initialization Error:', err);
+      console.error(
+        'Initialization Error:',
+        err
+      );
 
       setErrorMessage(
         err?.message ||
@@ -190,6 +283,7 @@ export default function NewConnection() {
       );
     } finally {
       setPackagesLoading(false);
+      setSerialLoading(false);
     }
   };
 
@@ -215,11 +309,61 @@ export default function NewConnection() {
   };
 
   /* =========================================================
-     PACKAGE SELECT
+     SERIAL MANUAL CHANGE
+  ========================================================= */
 
-     packages.name  -> customers.package_name
-     packages.speed -> customers.speed
-     packages.price -> customers.monthly_price
+  const handleSerialChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    let value = e.target.value
+      .toUpperCase()
+      .replace(/\s+/g, '');
+
+    /*
+      Only allow:
+      H
+      HF
+      HFN
+      HFN0
+      HFN0050 etc.
+    */
+
+    if (
+      value === '' ||
+      'HFN'.startsWith(value) ||
+      /^HFN\d*$/.test(value)
+    ) {
+      setFormData(prev => ({
+        ...prev,
+        serialNumber: value
+      }));
+
+      setErrorMessage('');
+    }
+  };
+
+  /* =========================================================
+     SERIAL BLUR FORMAT
+  ========================================================= */
+
+  const handleSerialBlur = () => {
+    if (!formData.serialNumber.trim()) {
+      generateAutoSerial();
+      return;
+    }
+
+    const formatted = formatSerialNumber(
+      formData.serialNumber
+    );
+
+    setFormData(prev => ({
+      ...prev,
+      serialNumber: formatted
+    }));
+  };
+
+  /* =========================================================
+     PACKAGE SELECT
   ========================================================= */
 
   const handlePackageSelect = (
@@ -255,16 +399,9 @@ export default function NewConnection() {
 
     setFormData(prev => ({
       ...prev,
-
       packageId: String(selectedPackage.id),
-
-      // packages.name
       packageName: selectedPackage.name,
-
-      // packages.speed
       speed: selectedPackage.speed,
-
-      // packages.price
       monthlyPrice: String(selectedPackage.price)
     }));
   };
@@ -286,7 +423,22 @@ export default function NewConnection() {
 
     try {
       /* =========================
-         VALIDATIONS
+         FORMAT + VALIDATE SERIAL
+      ========================= */
+
+      const finalSerial =
+        formatSerialNumber(
+          formData.serialNumber
+        );
+
+      if (!/^HFN\d{4,}$/.test(finalSerial)) {
+        throw new Error(
+          'کسٹمر ID درست فارمیٹ میں درج کریں۔ مثال: HFN0001 یا HFN0050'
+        );
+      }
+
+      /* =========================
+         NORMAL VALIDATIONS
       ========================= */
 
       if (!formData.fullName.trim()) {
@@ -339,21 +491,31 @@ export default function NewConnection() {
 
       /* =========================
          CHECK SERIAL DUPLICATE
+
+         Same serial cannot be assigned
+         to another customer.
       ========================= */
 
-      const { data: existingSerial } =
-        await supabase
-          .from('customers')
-          .select('id')
-          .eq(
-            'serial_number',
-            formData.serialNumber
-          )
-          .maybeSingle();
+      const {
+        data: existingSerial,
+        error: serialCheckError
+      } = await supabase
+        .from('customers')
+        .select(
+          'id, serial_number, full_name'
+        )
+        .eq('serial_number', finalSerial)
+        .maybeSingle();
+
+      if (serialCheckError) {
+        throw new Error(
+          `Serial Check Error: ${serialCheckError.message}`
+        );
+      }
 
       if (existingSerial) {
         throw new Error(
-          'یہ سیریل نمبر پہلے سے موجود ہے۔ صفحہ Refresh کر کے دوبارہ کوشش کریں۔'
+          `${finalSerial} پہلے ہی ${existingSerial.full_name || 'ایک صارف'} کو دیا جا چکا ہے۔ دوسرا سیریل نمبر منتخب کریں۔`
         );
       }
 
@@ -366,8 +528,7 @@ export default function NewConnection() {
           .from('customers')
           .insert([
             {
-              serial_number:
-                formData.serialNumber,
+              serial_number: finalSerial,
 
               full_name:
                 formData.fullName.trim(),
@@ -400,30 +561,35 @@ export default function NewConnection() {
                 Number(formData.monthlyPrice) || 0,
 
               connection_charges:
-                Number(formData.connectionCharges) || 0,
+                Number(
+                  formData.connectionCharges
+                ) || 0,
 
-              /*
-               packages.name
-               customers.package_name
-              */
               package_name:
                 formData.packageName,
 
-              /*
-               packages.speed
-               customers.speed
-              */
               speed:
                 formData.speed,
 
-              /*
-               Default Customer Portal Password
-              */
               password: '12345'
             }
           ]);
 
       if (insertError) {
+        /*
+          If database has UNIQUE constraint
+          on serial_number, duplicate is also
+          blocked here.
+        */
+
+        if (
+          insertError.code === '23505'
+        ) {
+          throw new Error(
+            `${finalSerial} پہلے سے کسی صارف کو دیا جا چکا ہے۔`
+          );
+        }
+
         throw new Error(
           `Supabase Error: ${insertError.message}`
         );
@@ -459,7 +625,7 @@ export default function NewConnection() {
 📋 *کنکشن کی تفصیلات*
 ━━━━━━━━━━━━━━
 
-🆔 *کسٹمر ID:* ${formData.serialNumber}
+🆔 *کسٹمر ID:* ${finalSerial}
 
 👤 *نام:* ${formData.fullName}
 
@@ -489,7 +655,7 @@ export default function NewConnection() {
 
 🌐 https://khanfiber.vercel.app
 
-🆔 *Customer ID:* ${formData.serialNumber}
+🆔 *Customer ID:* ${finalSerial}
 
 🔒 *Default Password:* 12345
 
@@ -517,20 +683,33 @@ Your Network Solution`;
       }
 
       /* =========================
-         RESET FORM
+         CLEAR FORM
       ========================= */
 
-      setFormData(prev => ({
+      setFormData({
         ...initialFormData,
-        serialNumber: prev.serialNumber
-      }));
+        serialNumber: ''
+      });
 
       /*
-       Generate next serial again
+        Immediately find next
+        first available/missing serial.
       */
-      setTimeout(() => {
-        loadInitialData();
-      }, 500);
+
+      try {
+        const nextSerial =
+          await getNextAvailableSerial();
+
+        setFormData({
+          ...initialFormData,
+          serialNumber: nextSerial
+        });
+      } catch (serialError) {
+        console.error(
+          'Next Serial Error:',
+          serialError
+        );
+      }
 
     } catch (err: any) {
       console.error(
@@ -551,14 +730,16 @@ Your Network Solution`;
      RESET
   ========================================================= */
 
-  const handleReset = () => {
-    setFormData(prev => ({
-      ...initialFormData,
-      serialNumber: prev.serialNumber
-    }));
-
+  const handleReset = async () => {
     setErrorMessage('');
     setIsSubmitted(false);
+
+    setFormData({
+      ...initialFormData,
+      serialNumber: ''
+    });
+
+    await generateAutoSerial();
   };
 
   /* =========================================================
@@ -618,10 +799,7 @@ Your Network Solution`;
           margin: '0 auto'
         }}
       >
-
-        {/* =========================
-            PAGE HEADER
-        ========================= */}
+        {/* PAGE HEADER */}
 
         <div
           style={{
@@ -688,9 +866,7 @@ Your Network Solution`;
           </div>
         </div>
 
-        {/* =========================
-            SUCCESS
-        ========================= */}
+        {/* SUCCESS */}
 
         {isSubmitted && (
           <div
@@ -709,14 +885,11 @@ Your Network Solution`;
             }}
           >
             <CheckCircle2 size={18} />
-
             نیا کنکشن کامیابی سے محفوظ ہو گیا ہے۔
           </div>
         )}
 
-        {/* =========================
-            ERROR
-        ========================= */}
+        {/* ERROR */}
 
         {errorMessage && (
           <div
@@ -735,14 +908,11 @@ Your Network Solution`;
             }}
           >
             <AlertCircle size={18} />
-
             {errorMessage}
           </div>
         )}
 
-        {/* =========================
-            FORM
-        ========================= */}
+        {/* FORM */}
 
         <form
           onSubmit={handleSubmit}
@@ -756,7 +926,6 @@ Your Network Solution`;
               '0 15px 40px rgba(0,0,0,.20)'
           }}
         >
-
           <div
             style={{
               display: 'grid',
@@ -765,7 +934,6 @@ Your Network Solution`;
               gap: '16px'
             }}
           >
-
             {/* SERIAL */}
 
             <div>
@@ -778,24 +946,83 @@ Your Network Solution`;
                 کسٹمر ID / سیریل نمبر
               </label>
 
-              <div style={{ position: 'relative' }}>
-                <input
-                  value={formData.serialNumber}
-                  readOnly
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '7px'
+                }}
+              >
+                <div
                   style={{
-                    ...autoInputStyle,
-                    direction: 'ltr',
-                    textAlign: 'right'
+                    position: 'relative',
+                    flex: 1
                   }}
-                />
+                >
+                  <input
+                    type="text"
+                    value={formData.serialNumber}
+                    onChange={handleSerialChange}
+                    onBlur={handleSerialBlur}
+                    placeholder="HFN0001"
+                    maxLength={12}
+                    style={{
+                      ...autoInputStyle,
+                      direction: 'ltr',
+                      paddingLeft: '12px',
+                      paddingRight: '40px'
+                    }}
+                  />
 
-                <Hash
-                  size={17}
+                  <Hash
+                    size={17}
+                    style={{
+                      ...iconStyle,
+                      color: '#22d3ee'
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={generateAutoSerial}
+                  disabled={serialLoading}
+                  title="پہلا خالی سیریل نمبر حاصل کریں"
                   style={{
-                    ...iconStyle,
-                    color: '#22d3ee'
+                    width: '44px',
+                    minWidth: '44px',
+                    borderRadius: '12px',
+                    border:
+                      '1px solid #0891b2',
+                    background:
+                      'rgba(8,145,178,.15)',
+                    color: '#67e8f9',
+                    cursor: serialLoading
+                      ? 'not-allowed'
+                      : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
-                />
+                >
+                  {serialLoading ? (
+                    <Loader2
+                      size={17}
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <RefreshCw size={17} />
+                  )}
+                </button>
+              </div>
+
+              <div
+                style={{
+                  fontSize: '10px',
+                  color: '#64748b',
+                  marginTop: '5px'
+                }}
+              >
+                Auto: پہلا خالی نمبر • Manual بھی درج کر سکتے ہیں
               </div>
             </div>
 
@@ -865,8 +1092,7 @@ Your Network Solution`;
                   onChange={handleChange}
                   style={{
                     ...inputStyle,
-                    direction: 'ltr',
-                    textAlign: 'right'
+                    direction: 'ltr'
                   }}
                 />
 
@@ -893,8 +1119,7 @@ Your Network Solution`;
                   onChange={handleChange}
                   style={{
                     ...inputStyle,
-                    direction: 'ltr',
-                    textAlign: 'right'
+                    direction: 'ltr'
                   }}
                 />
 
@@ -905,7 +1130,7 @@ Your Network Solution`;
               </div>
             </div>
 
-            {/* PACKAGE SELECT */}
+            {/* PACKAGE */}
 
             <div>
               <label
@@ -959,7 +1184,7 @@ Your Network Solution`;
               </div>
             </div>
 
-            {/* PACKAGE NAME AUTO */}
+            {/* PACKAGE NAME */}
 
             <div>
               <label
@@ -990,7 +1215,7 @@ Your Network Solution`;
               </div>
             </div>
 
-            {/* SPEED AUTO */}
+            {/* SPEED */}
 
             <div>
               <label
@@ -1021,7 +1246,7 @@ Your Network Solution`;
               </div>
             </div>
 
-            {/* MONTHLY PRICE AUTO */}
+            {/* MONTHLY PRICE */}
 
             <div>
               <label
@@ -1113,8 +1338,7 @@ Your Network Solution`;
                   onChange={handleChange}
                   style={{
                     ...inputStyle,
-                    direction: 'ltr',
-                    textAlign: 'right'
+                    direction: 'ltr'
                   }}
                 />
 
@@ -1141,8 +1365,7 @@ Your Network Solution`;
                   onChange={handleChange}
                   style={{
                     ...inputStyle,
-                    direction: 'ltr',
-                    textAlign: 'right'
+                    direction: 'ltr'
                   }}
                 />
 
@@ -1152,7 +1375,6 @@ Your Network Solution`;
                 />
               </div>
             </div>
-
           </div>
 
           {/* ADDRESS */}
@@ -1183,9 +1405,7 @@ Your Network Solution`;
             </div>
           </div>
 
-          {/* =========================
-              PPPOE SECTION
-          ========================= */}
+          {/* PPPOE SECTION */}
 
           <div
             style={{
@@ -1213,7 +1433,6 @@ Your Network Solution`;
                 gap: '16px'
               }}
             >
-
               {/* PPPOE USER */}
 
               <div>
@@ -1279,13 +1498,10 @@ Your Network Solution`;
                   />
                 </div>
               </div>
-
             </div>
           </div>
 
-          {/* =========================
-              BUTTONS
-          ========================= */}
+          {/* BUTTONS */}
 
           <div
             style={{
@@ -1315,18 +1531,21 @@ Your Network Solution`;
               }}
             >
               <RotateCcw size={16} />
-
               ری سیٹ
             </button>
 
             <button
               type="submit"
               disabled={
-                loading || packagesLoading
+                loading ||
+                packagesLoading ||
+                serialLoading
               }
               style={{
                 background:
-                  loading || packagesLoading
+                  loading ||
+                  packagesLoading ||
+                  serialLoading
                     ? '#155e75'
                     : 'linear-gradient(135deg, #0891b2, #2563eb)',
                 color: '#ffffff',
@@ -1336,7 +1555,9 @@ Your Network Solution`;
                 fontWeight: '800',
                 border: 'none',
                 cursor:
-                  loading || packagesLoading
+                  loading ||
+                  packagesLoading ||
+                  serialLoading
                     ? 'not-allowed'
                     : 'pointer',
                 display: 'flex',
@@ -1352,19 +1573,16 @@ Your Network Solution`;
                     size={16}
                     className="animate-spin"
                   />
-
                   محفوظ ہو رہا ہے...
                 </>
               ) : (
                 <>
                   <Save size={16} />
-
                   محفوظ کریں اور واٹس ایپ بھیجیں
                 </>
               )}
             </button>
           </div>
-
         </form>
       </div>
     </Layout>
