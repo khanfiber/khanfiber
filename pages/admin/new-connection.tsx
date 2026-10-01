@@ -22,7 +22,8 @@ import {
   DollarSign,
   Package,
   RefreshCw,
-  CalendarDays
+  CalendarDays,
+  Send
 } from 'lucide-react';
 
 /* =========================================================
@@ -61,9 +62,27 @@ interface FormDataType {
   speed: string;
 }
 
+interface SavedCustomerType {
+  serialNumber: string;
+  connectionDate: string;
+
+  fullName: string;
+
+  phone: string;
+  whatsapp: string;
+
+  packageName: string;
+  speed: string;
+
+  monthlyPrice: string;
+  connectionCharges: string;
+
+  pppoeUsername: string;
+  pppoePassword: string;
+}
+
 /* =========================================================
    LOCAL TODAY
-   Uses device local date instead of UTC date
 ========================================================= */
 
 const getLocalToday = (): string => {
@@ -84,7 +103,6 @@ const getLocalToday = (): string => {
 
 /* =========================================================
    DISPLAY DATE
-   2026-09-26 -> 26-09-2026
 ========================================================= */
 
 const formatDisplayDate = (
@@ -167,12 +185,15 @@ export default function NewConnection() {
     setErrorMessage
   ] = useState('');
 
+  const [
+    savedCustomer,
+    setSavedCustomer
+  ] = useState<SavedCustomerType | null>(
+    null
+  );
+
   /* =========================================================
      SERIAL FORMAT
-
-     HFN1    -> HFN0001
-     HFN50   -> HFN0050
-     HFN0050 -> HFN0050
   ========================================================= */
 
   const formatSerialNumber = (
@@ -210,13 +231,6 @@ export default function NewConnection() {
 
   /* =========================================================
      FIRST AVAILABLE SERIAL
-
-     HFN0001
-     HFN0002
-     HFN0004
-
-     Result:
-     HFN0003
   ========================================================= */
 
   const getNextAvailableSerial =
@@ -309,7 +323,7 @@ export default function NewConnection() {
 
         setErrorMessage(
           err?.message ||
-            'سیریل نمبر بنانے میں خرابی پیش آئی۔'
+          'سیریل نمبر بنانے میں خرابی پیش آئی۔'
         );
       } finally {
         setSerialLoading(false);
@@ -327,8 +341,6 @@ export default function NewConnection() {
       setErrorMessage('');
 
       try {
-        /* SERIAL */
-
         const nextSerial =
           await getNextAvailableSerial();
 
@@ -342,8 +354,6 @@ export default function NewConnection() {
             prev.connectionDate ||
             getLocalToday()
         }));
-
-        /* PACKAGES */
 
         const {
           data: pkgData,
@@ -399,7 +409,7 @@ export default function NewConnection() {
 
         setErrorMessage(
           err?.message ||
-            'ابتدائی ڈیٹا لوڈ کرنے میں خرابی پیش آئی۔'
+          'ابتدائی ڈیٹا لوڈ کرنے میں خرابی پیش آئی۔'
         );
       } finally {
         setPackagesLoading(
@@ -441,7 +451,7 @@ export default function NewConnection() {
   };
 
   /* =========================================================
-     MANUAL SERIAL CHANGE
+     MANUAL SERIAL
   ========================================================= */
 
   const handleSerialChange = (
@@ -452,30 +462,15 @@ export default function NewConnection() {
         .toUpperCase()
         .replace(/\s+/g, '');
 
-    /*
-      Allowed typing:
-
-      H
-      HF
-      HFN
-      HFN1
-      HFN0050
-    */
-
     if (
       value === '' ||
-      'HFN'.startsWith(
-        value
-      ) ||
-      /^HFN\d*$/.test(
-        value
-      )
+      'HFN'.startsWith(value) ||
+      /^HFN\d*$/.test(value)
     ) {
       setFormData(
         prev => ({
           ...prev,
-          serialNumber:
-            value
+          serialNumber: value
         })
       );
 
@@ -485,7 +480,7 @@ export default function NewConnection() {
   };
 
   /* =========================================================
-     FORMAT SERIAL AFTER BLUR
+     SERIAL BLUR
   ========================================================= */
 
   const handleSerialBlur =
@@ -524,9 +519,7 @@ export default function NewConnection() {
     setErrorMessage('');
     setIsSubmitted(false);
 
-    if (
-      !selectedPackageId
-    ) {
+    if (!selectedPackageId) {
       setFormData(
         prev => ({
           ...prev,
@@ -580,7 +573,8 @@ export default function NewConnection() {
   };
 
   /* =========================================================
-     SUBMIT
+     SAVE CUSTOMER ONLY
+     WhatsApp DOES NOT open here
   ========================================================= */
 
   const handleSubmit = async (
@@ -595,10 +589,6 @@ export default function NewConnection() {
     setIsSubmitted(false);
 
     try {
-      /* =========================
-         SERIAL
-      ========================= */
-
       const finalSerial =
         formatSerialNumber(
           formData.serialNumber
@@ -613,10 +603,6 @@ export default function NewConnection() {
           'کسٹمر ID درست فارمیٹ میں درج کریں۔ مثال: HFN0001 یا HFN0050'
         );
       }
-
-      /* =========================
-         CONNECTION DATE
-      ========================= */
 
       if (
         !formData.connectionDate
@@ -637,14 +623,6 @@ export default function NewConnection() {
           'کنکشن کی تاریخ مستقبل کی نہیں ہو سکتی۔'
         );
       }
-
-      const isNewConnection =
-        formData.connectionDate ===
-        today;
-
-      /* =========================
-         VALIDATIONS
-      ========================= */
 
       if (
         !formData.fullName.trim()
@@ -707,7 +685,7 @@ export default function NewConnection() {
       if (
         Number(
           formData.connectionCharges ||
-            0
+          0
         ) < 0
       ) {
         throw new Error(
@@ -731,15 +709,11 @@ export default function NewConnection() {
         );
       }
 
-      /* =========================
-         DUPLICATE SERIAL CHECK
-      ========================= */
+      /* DUPLICATE SERIAL */
 
       const {
-        data:
-          existingSerial,
-        error:
-          serialCheckError
+        data: existingSerial,
+        error: serialCheckError
       } = await supabase
         .from('customers')
         .select(
@@ -770,15 +744,11 @@ export default function NewConnection() {
         );
       }
 
-      /* =========================
-         DUPLICATE PPPOE CHECK
-      ========================= */
+      /* DUPLICATE PPPOE */
 
       const {
-        data:
-          existingPPPoE,
-        error:
-          pppoeCheckError
+        data: existingPPPoE,
+        error: pppoeCheckError
       } = await supabase
         .from('customers')
         .select(
@@ -802,13 +772,14 @@ export default function NewConnection() {
         existingPPPoE
       ) {
         throw new Error(
-          `PPPoE Username "${formData.pppoeUsername}" پہلے ہی ${existingPPPoE.full_name || 'ایک صارف'} کے پاس موجود ہے۔`
+          `PPPoE Username "${formData.pppoeUsername}" پہلے ہی ${
+            existingPPPoE.full_name ||
+            'ایک صارف'
+          } کے پاس موجود ہے۔`
         );
       }
 
-      /* =========================
-         INSERT CUSTOMER
-      ========================= */
+      /* INSERT */
 
       const {
         error: insertError
@@ -887,38 +858,100 @@ export default function NewConnection() {
         );
       }
 
-      /* =========================
-         SUCCESS
-      ========================= */
+      /* SAVE COPY FOR OPTIONAL WHATSAPP */
+
+      setSavedCustomer({
+        serialNumber:
+          finalSerial,
+
+        connectionDate:
+          formData.connectionDate,
+
+        fullName:
+          formData.fullName.trim(),
+
+        phone:
+          formData.phone.trim(),
+
+        whatsapp:
+          formData.whatsapp.trim() ||
+          formData.phone.trim(),
+
+        packageName:
+          formData.packageName,
+
+        speed:
+          formData.speed,
+
+        monthlyPrice:
+          formData.monthlyPrice,
+
+        connectionCharges:
+          formData.connectionCharges,
+
+        pppoeUsername:
+          formData.pppoeUsername.trim(),
+
+        pppoePassword:
+          formData.pppoePassword.trim()
+      });
 
       setIsSubmitted(true);
 
-      /* =========================
-         WHATSAPP
-      ========================= */
+    } catch (err: any) {
+      console.error(
+        'New Connection Error:',
+        err
+      );
 
-      const targetPhone =
-        formData.whatsapp.trim() ||
-        formData.phone.trim();
+      setErrorMessage(
+        err?.message ||
+        'غیر متوقع خرابی پیش آئی۔'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      const portalUrl =
-        'https://khanfiber.vercel.app';
+  /* =========================================================
+     WHATSAPP - MANUAL BUTTON ONLY
+  ========================================================= */
 
-      if (targetPhone) {
-        let whatsappMessage =
-          '';
+  const handleSendWhatsApp = () => {
+    if (!savedCustomer) {
+      setErrorMessage(
+        'پہلے کسٹمر کو محفوظ کریں۔'
+      );
+      return;
+    }
 
-        /* =========================
-           TODAY'S NEW CONNECTION
-        ========================= */
+    const targetPhone =
+      savedCustomer.whatsapp ||
+      savedCustomer.phone;
 
-        if (isNewConnection) {
-          whatsappMessage =
+    if (!targetPhone) {
+      setErrorMessage(
+        'واٹس ایپ یا فون نمبر موجود نہیں ہے۔'
+      );
+      return;
+    }
+
+    const portalUrl =
+      'https://khanfiber.vercel.app';
+
+    const isNewConnection =
+      savedCustomer.connectionDate ===
+      getLocalToday();
+
+    let whatsappMessage = '';
+
+    if (isNewConnection) {
+      whatsappMessage =
 `🌐 *ONE CLICK - HAIDER FIBER NETWORK* 🌐
 
 🎉 *نیا انٹرنیٹ کنکشن مبارک!* 🎉
 
-محترم *${formData.fullName}*!
+محترم *${savedCustomer.fullName}*!
 
 *One Click - Haider Fiber Network* میں خوش آمدید۔
 
@@ -928,34 +961,34 @@ export default function NewConnection() {
 📋 *کنکشن کی تفصیلات*
 ━━━━━━━━━━━━━━
 
-🆔 *Customer ID:* ${finalSerial}
+🆔 *Customer ID:* ${savedCustomer.serialNumber}
 
-👤 *نام:* ${formData.fullName}
+👤 *نام:* ${savedCustomer.fullName}
 
 📅 *کنکشن کی تاریخ:* ${formatDisplayDate(
-            formData.connectionDate
-          )}
+        savedCustomer.connectionDate
+      )}
 
-📦 *پیکیج:* ${formData.packageName}
+📦 *پیکیج:* ${savedCustomer.packageName}
 
-⚡ *انٹرنیٹ سپیڈ:* ${formData.speed}
+⚡ *انٹرنیٹ سپیڈ:* ${savedCustomer.speed}
 
 💰 *ماہانہ چارجز:* Rs ${Number(
-            formData.monthlyPrice
-          ).toLocaleString()}
+        savedCustomer.monthlyPrice
+      ).toLocaleString()}
 
 🔧 *کنکشن چارجز:* Rs ${Number(
-            formData.connectionCharges ||
-              0
-          ).toLocaleString()}
+        savedCustomer.connectionCharges ||
+        0
+      ).toLocaleString()}
 
 ━━━━━━━━━━━━━━
 🔐 *PPPoE Login*
 ━━━━━━━━━━━━━━
 
-👤 *PPPoE Username:* ${formData.pppoeUsername}
+👤 *PPPoE Username:* ${savedCustomer.pppoeUsername}
 
-🔑 *PPPoE Password:* ${formData.pppoePassword}
+🔑 *PPPoE Password:* ${savedCustomer.pppoePassword}
 
 ━━━━━━━━━━━━━━
 📱 *Customer Portal*
@@ -963,7 +996,7 @@ export default function NewConnection() {
 
 🌐 ${portalUrl}
 
-🆔 *Username:* ${finalSerial}
+🆔 *Username:* ${savedCustomer.serialNumber}
 
 🔒 *Default Password:* 12345
 
@@ -990,17 +1023,11 @@ export default function NewConnection() {
 *Haider Fiber Network (SMC-Private) Limited*
 
 _Your Network Solution_`;
-        }
-
-        /* =========================
-           EXISTING / OLD CONNECTION
-        ========================= */
-
-        else {
-          whatsappMessage =
+    } else {
+      whatsappMessage =
 `🌐 *ONE CLICK - HAIDER FIBER NETWORK* 🌐
 
-محترم *${formData.fullName}*!
+محترم *${savedCustomer.fullName}*!
 
 آپ کے موجودہ انٹرنیٹ کنکشن کی معلومات *One Click - Haider Fiber Network* کے آن لائن مینجمنٹ سسٹم میں رجسٹر کر دی گئی ہیں۔
 
@@ -1008,25 +1035,25 @@ _Your Network Solution_`;
 📋 *کنکشن کی معلومات*
 ━━━━━━━━━━━━━━
 
-🆔 *Customer ID:* ${finalSerial}
+🆔 *Customer ID:* ${savedCustomer.serialNumber}
 
-👤 *نام:* ${formData.fullName}
+👤 *نام:* ${savedCustomer.fullName}
 
 📅 *کنکشن کی تاریخ:* ${formatDisplayDate(
-            formData.connectionDate
-          )}
+        savedCustomer.connectionDate
+      )}
 
-📦 *پیکیج:* ${formData.packageName}
+📦 *پیکیج:* ${savedCustomer.packageName}
 
-⚡ *انٹرنیٹ سپیڈ:* ${formData.speed}
+⚡ *انٹرنیٹ سپیڈ:* ${savedCustomer.speed}
 
 ━━━━━━━━━━━━━━
 🔐 *PPPoE Login*
 ━━━━━━━━━━━━━━
 
-👤 *PPPoE Username:* ${formData.pppoeUsername}
+👤 *PPPoE Username:* ${savedCustomer.pppoeUsername}
 
-🔑 *PPPoE Password:* ${formData.pppoePassword}
+🔑 *PPPoE Password:* ${savedCustomer.pppoePassword}
 
 ━━━━━━━━━━━━━━
 📱 *Customer Portal Login*
@@ -1034,7 +1061,7 @@ _Your Network Solution_`;
 
 🌐 ${portalUrl}
 
-🆔 *Username:* ${finalSerial}
+🆔 *Username:* ${savedCustomer.serialNumber}
 
 🔒 *Default Password:* 12345
 
@@ -1061,74 +1088,29 @@ _Your Network Solution_`;
 *Haider Fiber Network (SMC-Private) Limited*
 
 _Your Network Solution_`;
-        }
+    }
 
-        try {
-          openWhatsAppDirect(
-            targetPhone,
-            whatsappMessage
-          );
-        } catch (
-          whatsappError
-        ) {
-          console.error(
-            'WhatsApp Error:',
-            whatsappError
-          );
-        }
-      }
-
-      /* =========================
-         NEXT SERIAL + RESET
-      ========================= */
-
-      try {
-        const nextSerial =
-          await getNextAvailableSerial();
-
-        setFormData({
-          ...createInitialFormData(),
-
-          serialNumber:
-            nextSerial,
-
-          connectionDate:
-            getLocalToday()
-        });
-      } catch (
-        serialError
-      ) {
-        console.error(
-          'Next Serial Error:',
-          serialError
-        );
-
-        setFormData({
-          ...createInitialFormData(),
-
-          serialNumber: '',
-
-          connectionDate:
-            getLocalToday()
-        });
-      }
-    } catch (err: any) {
+    try {
+      openWhatsAppDirect(
+        targetPhone,
+        whatsappMessage
+      );
+    } catch (
+      whatsappError
+    ) {
       console.error(
-        'New Connection Error:',
-        err
+        'WhatsApp Error:',
+        whatsappError
       );
 
       setErrorMessage(
-        err?.message ||
-          'غیر متوقع خرابی پیش آئی۔'
+        'واٹس ایپ کھولنے میں مسئلہ پیش آیا۔'
       );
-    } finally {
-      setLoading(false);
     }
   };
 
   /* =========================================================
-     RESET
+     RESET / NEW CUSTOMER
   ========================================================= */
 
   const handleReset =
@@ -1137,6 +1119,7 @@ _Your Network Solution_`;
 
       setErrorMessage('');
       setIsSubmitted(false);
+      setSavedCustomer(null);
 
       setFormData({
         ...createInitialFormData(),
@@ -1165,7 +1148,7 @@ _Your Network Solution_`;
       } catch (err: any) {
         setErrorMessage(
           err?.message ||
-            'سیریل نمبر حاصل نہیں ہو سکا۔'
+          'سیریل نمبر حاصل نہیں ہو سکا۔'
         );
       } finally {
         setSerialLoading(false);
@@ -1275,9 +1258,8 @@ _Your Network Solution_`;
           margin: '0 auto'
         }}
       >
-        {/* ======================
-            HEADER
-        ====================== */}
+
+        {/* HEADER */}
 
         <div
           style={{
@@ -1348,22 +1330,17 @@ _Your Network Solution_`;
                   'center'
               }}
             >
-              <UserPlus
-                size={26}
-              />
+              <UserPlus size={26} />
             </div>
 
             <div>
               <h2
                 style={{
                   margin: 0,
-
                   fontSize:
                     '20px',
-
                   fontWeight:
                     '800',
-
                   color:
                     '#f8fafc'
                 }}
@@ -1375,13 +1352,10 @@ _Your Network Solution_`;
                 style={{
                   margin:
                     '4px 0 0',
-
                   color:
                     '#64748b',
-
                   fontSize:
                     '11px',
-
                   direction:
                     'ltr'
                 }}
@@ -1392,11 +1366,9 @@ _Your Network Solution_`;
           </div>
         </div>
 
-        {/* ======================
-            SUCCESS
-        ====================== */}
+        {/* SUCCESS */}
 
-        {isSubmitted && (
+        {isSubmitted && savedCustomer && (
           <div
             style={{
               background:
@@ -1427,17 +1399,18 @@ _Your Network Solution_`;
                 '8px'
             }}
           >
-            <CheckCircle2
-              size={18}
-            />
+            <CheckCircle2 size={18} />
 
-            کنکشن کامیابی سے محفوظ ہو گیا ہے۔
+            <span>
+              <strong>
+                {savedCustomer.serialNumber}
+              </strong>{' '}
+              کامیابی سے محفوظ ہو گیا ہے۔ واٹس ایپ میسج صرف تب بھیجا جائے گا جب آپ نیچے سبز بٹن دبائیں گے۔
+            </span>
           </div>
         )}
 
-        {/* ======================
-            ERROR
-        ====================== */}
+        {/* ERROR */}
 
         {errorMessage && (
           <div
@@ -1470,17 +1443,13 @@ _Your Network Solution_`;
                 '8px'
             }}
           >
-            <AlertCircle
-              size={18}
-            />
+            <AlertCircle size={18} />
 
             {errorMessage}
           </div>
         )}
 
-        {/* ======================
-            FORM
-        ====================== */}
+        {/* FORM */}
 
         <form
           onSubmit={
@@ -1515,9 +1484,8 @@ _Your Network Solution_`;
                 '16px'
             }}
           >
-            {/* ======================
-                SERIAL
-            ====================== */}
+
+            {/* SERIAL */}
 
             <div>
               <label
@@ -1534,7 +1502,6 @@ _Your Network Solution_`;
                 style={{
                   display:
                     'flex',
-
                   gap:
                     '7px'
                 }}
@@ -1543,9 +1510,7 @@ _Your Network Solution_`;
                   style={{
                     position:
                       'relative',
-
-                    flex:
-                      1
+                    flex: 1
                   }}
                 >
                   <input
@@ -1560,21 +1525,23 @@ _Your Network Solution_`;
                       handleSerialBlur
                     }
                     placeholder="HFN"
-                    maxLength={
-                      12
-                    }
+                    maxLength={12}
                     required
+                    disabled={
+                      !!savedCustomer
+                    }
                     style={{
                       ...autoInputStyle,
-
                       direction:
                         'ltr',
-
                       paddingLeft:
                         '12px',
-
                       paddingRight:
-                        '40px'
+                        '40px',
+                      opacity:
+                        savedCustomer
+                          ? 0.7
+                          : 1
                     }}
                   />
 
@@ -1582,7 +1549,6 @@ _Your Network Solution_`;
                     size={17}
                     style={{
                       ...iconStyle,
-
                       color:
                         '#22d3ee'
                     }}
@@ -1595,7 +1561,8 @@ _Your Network Solution_`;
                     generateAutoSerial
                   }
                   disabled={
-                    serialLoading
+                    serialLoading ||
+                    !!savedCustomer
                   }
                   title="پہلا خالی سیریل نمبر حاصل کریں"
                   style={{
@@ -1618,7 +1585,8 @@ _Your Network Solution_`;
                       '#67e8f9',
 
                     cursor:
-                      serialLoading
+                      serialLoading ||
+                      savedCustomer
                         ? 'not-allowed'
                         : 'pointer',
 
@@ -1638,9 +1606,7 @@ _Your Network Solution_`;
                       className="animate-spin"
                     />
                   ) : (
-                    <RefreshCw
-                      size={17}
-                    />
+                    <RefreshCw size={17} />
                   )}
                 </button>
               </div>
@@ -1649,10 +1615,8 @@ _Your Network Solution_`;
                 style={{
                   fontSize:
                     '10px',
-
                   color:
                     '#64748b',
-
                   marginTop:
                     '5px'
                 }}
@@ -1661,15 +1625,12 @@ _Your Network Solution_`;
               </div>
             </div>
 
-            {/* ======================
-                CONNECTION DATE
-            ====================== */}
+            {/* CONNECTION DATE */}
 
             <div>
               <label
                 style={{
                   ...labelStyle,
-
                   color:
                     '#fbbf24'
                 }}
@@ -1696,6 +1657,9 @@ _Your Network Solution_`;
                   onChange={
                     handleChange
                   }
+                  disabled={
+                    !!savedCustomer
+                  }
                   style={{
                     ...autoInputStyle,
 
@@ -1717,7 +1681,6 @@ _Your Network Solution_`;
                   size={17}
                   style={{
                     ...iconStyle,
-
                     color:
                       '#fbbf24'
                   }}
@@ -1728,10 +1691,8 @@ _Your Network Solution_`;
                 style={{
                   fontSize:
                     '10px',
-
                   color:
                     '#64748b',
-
                   marginTop:
                     '5px'
                 }}
@@ -1740,25 +1701,14 @@ _Your Network Solution_`;
               </div>
             </div>
 
-            {/* ======================
-                FULL NAME
-            ====================== */}
+            {/* FULL NAME */}
 
             <div>
-              <label
-                style={
-                  labelStyle
-                }
-              >
+              <label style={labelStyle}>
                 صارف کا نام (Full Name) *
               </label>
 
-              <div
-                style={{
-                  position:
-                    'relative'
-                }}
-              >
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   name="fullName"
@@ -1770,39 +1720,27 @@ _Your Network Solution_`;
                   onChange={
                     handleChange
                   }
-                  style={
-                    inputStyle
+                  disabled={
+                    !!savedCustomer
                   }
+                  style={inputStyle}
                 />
 
                 <User
                   size={17}
-                  style={
-                    iconStyle
-                  }
+                  style={iconStyle}
                 />
               </div>
             </div>
 
-            {/* ======================
-                FATHER
-            ====================== */}
+            {/* FATHER */}
 
             <div>
-              <label
-                style={
-                  labelStyle
-                }
-              >
+              <label style={labelStyle}>
                 ولدیت (Father Name)
               </label>
 
-              <div
-                style={{
-                  position:
-                    'relative'
-                }}
-              >
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   name="fatherName"
@@ -1813,39 +1751,27 @@ _Your Network Solution_`;
                   onChange={
                     handleChange
                   }
-                  style={
-                    inputStyle
+                  disabled={
+                    !!savedCustomer
                   }
+                  style={inputStyle}
                 />
 
                 <User
                   size={17}
-                  style={
-                    iconStyle
-                  }
+                  style={iconStyle}
                 />
               </div>
             </div>
 
-            {/* ======================
-                PHONE
-            ====================== */}
+            {/* PHONE */}
 
             <div>
-              <label
-                style={
-                  labelStyle
-                }
-              >
+              <label style={labelStyle}>
                 فون نمبر (Mobile Number) *
               </label>
 
-              <div
-                style={{
-                  position:
-                    'relative'
-                }}
-              >
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   name="phone"
@@ -1857,42 +1783,30 @@ _Your Network Solution_`;
                   onChange={
                     handleChange
                   }
+                  disabled={
+                    !!savedCustomer
+                  }
                   style={{
                     ...inputStyle,
-
-                    direction:
-                      'ltr'
+                    direction: 'ltr'
                   }}
                 />
 
                 <Phone
                   size={17}
-                  style={
-                    iconStyle
-                  }
+                  style={iconStyle}
                 />
               </div>
             </div>
 
-            {/* ======================
-                WHATSAPP
-            ====================== */}
+            {/* WHATSAPP */}
 
             <div>
-              <label
-                style={
-                  labelStyle
-                }
-              >
+              <label style={labelStyle}>
                 واٹس ایپ نمبر (WhatsApp)
               </label>
 
-              <div
-                style={{
-                  position:
-                    'relative'
-                }}
-              >
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   name="whatsapp"
@@ -1903,32 +1817,28 @@ _Your Network Solution_`;
                   onChange={
                     handleChange
                   }
+                  disabled={
+                    !!savedCustomer
+                  }
                   style={{
                     ...inputStyle,
-
-                    direction:
-                      'ltr'
+                    direction: 'ltr'
                   }}
                 />
 
                 <MessageSquare
                   size={17}
-                  style={
-                    iconStyle
-                  }
+                  style={iconStyle}
                 />
               </div>
             </div>
 
-            {/* ======================
-                PACKAGE
-            ====================== */}
+            {/* PACKAGE */}
 
             <div>
               <label
                 style={{
                   ...labelStyle,
-
                   color:
                     '#67e8f9'
                 }}
@@ -1936,12 +1846,7 @@ _Your Network Solution_`;
                 انٹرنیٹ پیکیج (Select Package) *
               </label>
 
-              <div
-                style={{
-                  position:
-                    'relative'
-                }}
-              >
+              <div style={{ position: 'relative' }}>
                 <select
                   required
                   value={
@@ -1951,16 +1856,17 @@ _Your Network Solution_`;
                     handlePackageSelect
                   }
                   disabled={
-                    packagesLoading
+                    packagesLoading ||
+                    !!savedCustomer
                   }
                   style={{
                     ...autoInputStyle,
-
                     appearance:
                       'none',
-
                     cursor:
-                      'pointer'
+                      savedCustomer
+                        ? 'not-allowed'
+                        : 'pointer'
                   }}
                 >
                   <option value="">
@@ -1972,9 +1878,7 @@ _Your Network Solution_`;
                   {packagesList.map(
                     pkg => (
                       <option
-                        key={
-                          pkg.id
-                        }
+                        key={pkg.id}
                         value={String(
                           pkg.id
                         )}
@@ -1993,7 +1897,6 @@ _Your Network Solution_`;
                   size={17}
                   style={{
                     ...iconStyle,
-
                     color:
                       '#22d3ee'
                   }}
@@ -2014,12 +1917,7 @@ _Your Network Solution_`;
                 پیکیج نام (Auto)
               </label>
 
-              <div
-                style={{
-                  position:
-                    'relative'
-                }}
-              >
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   value={
@@ -2056,12 +1954,7 @@ _Your Network Solution_`;
                 انٹرنیٹ سپیڈ (Auto)
               </label>
 
-              <div
-                style={{
-                  position:
-                    'relative'
-                }}
-              >
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   value={
@@ -2098,12 +1991,7 @@ _Your Network Solution_`;
                 ماہانہ چارجز (Auto)
               </label>
 
-              <div
-                style={{
-                  position:
-                    'relative'
-                }}
-              >
+              <div style={{ position: 'relative' }}>
                 <input
                   type="number"
                   value={
@@ -2113,10 +2001,8 @@ _Your Network Solution_`;
                   placeholder="ماہانہ چارجز"
                   style={{
                     ...autoInputStyle,
-
                     border:
                       '1px solid #059669',
-
                     color:
                       '#34d399'
                   }}
@@ -2146,12 +2032,7 @@ _Your Network Solution_`;
                 کنکشن چارجز
               </label>
 
-              <div
-                style={{
-                  position:
-                    'relative'
-                }}
-              >
+              <div style={{ position: 'relative' }}>
                 <input
                   type="number"
                   name="connectionCharges"
@@ -2163,12 +2044,13 @@ _Your Network Solution_`;
                   onChange={
                     handleChange
                   }
+                  disabled={
+                    !!savedCustomer
+                  }
                   style={{
                     ...inputStyle,
-
                     border:
                       '1px solid #9d174d',
-
                     color:
                       '#f9a8d4'
                   }}
@@ -2188,20 +2070,11 @@ _Your Network Solution_`;
             {/* EMAIL */}
 
             <div>
-              <label
-                style={
-                  labelStyle
-                }
-              >
+              <label style={labelStyle}>
                 ای میل (Email)
               </label>
 
-              <div
-                style={{
-                  position:
-                    'relative'
-                }}
-              >
+              <div style={{ position: 'relative' }}>
                 <input
                   type="email"
                   name="email"
@@ -2212,9 +2085,11 @@ _Your Network Solution_`;
                   onChange={
                     handleChange
                   }
+                  disabled={
+                    !!savedCustomer
+                  }
                   style={{
                     ...inputStyle,
-
                     direction:
                       'ltr'
                   }}
@@ -2222,9 +2097,7 @@ _Your Network Solution_`;
 
                 <Mail
                   size={17}
-                  style={
-                    iconStyle
-                  }
+                  style={iconStyle}
                 />
               </div>
             </div>
@@ -2232,20 +2105,11 @@ _Your Network Solution_`;
             {/* CNIC */}
 
             <div>
-              <label
-                style={
-                  labelStyle
-                }
-              >
+              <label style={labelStyle}>
                 شناختی کارڈ (CNIC)
               </label>
 
-              <div
-                style={{
-                  position:
-                    'relative'
-                }}
-              >
+              <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   name="cnic"
@@ -2256,9 +2120,11 @@ _Your Network Solution_`;
                   onChange={
                     handleChange
                   }
+                  disabled={
+                    !!savedCustomer
+                  }
                   style={{
                     ...inputStyle,
-
                     direction:
                       'ltr'
                   }}
@@ -2266,17 +2132,13 @@ _Your Network Solution_`;
 
                 <CreditCard
                   size={17}
-                  style={
-                    iconStyle
-                  }
+                  style={iconStyle}
                 />
               </div>
             </div>
           </div>
 
-          {/* ======================
-              ADDRESS
-          ====================== */}
+          {/* ADDRESS */}
 
           <div
             style={{
@@ -2284,20 +2146,11 @@ _Your Network Solution_`;
                 '16px'
             }}
           >
-            <label
-              style={
-                labelStyle
-              }
-            >
+            <label style={labelStyle}>
               مکمل ایڈریس (Address)
             </label>
 
-            <div
-              style={{
-                position:
-                  'relative'
-              }}
-            >
+            <div style={{ position: 'relative' }}>
               <textarea
                 name="address"
                 rows={3}
@@ -2308,12 +2161,13 @@ _Your Network Solution_`;
                 onChange={
                   handleChange
                 }
+                disabled={
+                  !!savedCustomer
+                }
                 style={{
                   ...inputStyle,
-
                   resize:
                     'vertical',
-
                   fontFamily:
                     'inherit'
                 }}
@@ -2321,16 +2175,12 @@ _Your Network Solution_`;
 
               <MapPin
                 size={17}
-                style={
-                  iconStyle
-                }
+                style={iconStyle}
               />
             </div>
           </div>
 
-          {/* ======================
-              PPPOE
-          ====================== */}
+          {/* PPPOE */}
 
           <div
             style={{
@@ -2372,20 +2222,11 @@ _Your Network Solution_`;
               }}
             >
               <div>
-                <label
-                  style={
-                    labelStyle
-                  }
-                >
+                <label style={labelStyle}>
                   PPPoE یوزر نیم *
                 </label>
 
-                <div
-                  style={{
-                    position:
-                      'relative'
-                  }}
-                >
+                <div style={{ position: 'relative' }}>
                   <input
                     type="text"
                     name="pppoeUsername"
@@ -2397,9 +2238,11 @@ _Your Network Solution_`;
                     onChange={
                       handleChange
                     }
+                    disabled={
+                      !!savedCustomer
+                    }
                     style={{
                       ...autoInputStyle,
-
                       direction:
                         'ltr'
                     }}
@@ -2409,7 +2252,6 @@ _Your Network Solution_`;
                     size={17}
                     style={{
                       ...iconStyle,
-
                       color:
                         '#22d3ee'
                     }}
@@ -2418,20 +2260,11 @@ _Your Network Solution_`;
               </div>
 
               <div>
-                <label
-                  style={
-                    labelStyle
-                  }
-                >
+                <label style={labelStyle}>
                   PPPoE پاسورڈ *
                 </label>
 
-                <div
-                  style={{
-                    position:
-                      'relative'
-                  }}
-                >
+                <div style={{ position: 'relative' }}>
                   <input
                     type="text"
                     name="pppoePassword"
@@ -2443,9 +2276,11 @@ _Your Network Solution_`;
                     onChange={
                       handleChange
                     }
+                    disabled={
+                      !!savedCustomer
+                    }
                     style={{
                       ...autoInputStyle,
-
                       direction:
                         'ltr'
                     }}
@@ -2455,7 +2290,6 @@ _Your Network Solution_`;
                     size={17}
                     style={{
                       ...iconStyle,
-
                       color:
                         '#22d3ee'
                     }}
@@ -2465,9 +2299,7 @@ _Your Network Solution_`;
             </div>
           </div>
 
-          {/* ======================
-              BUTTONS
-          ====================== */}
+          {/* BUTTONS */}
 
           <div
             style={{
@@ -2487,20 +2319,26 @@ _Your Network Solution_`;
                 '24px'
             }}
           >
+
+            {/* RESET / NEW CUSTOMER */}
+
             <button
               type="button"
               onClick={
                 handleReset
               }
               disabled={
-                loading
+                loading ||
+                serialLoading
               }
               style={{
                 background:
-                  '#1e293b',
+                  savedCustomer
+                    ? 'linear-gradient(135deg, #7c3aed, #4f46e5)'
+                    : '#1e293b',
 
                 color:
-                  '#cbd5e1',
+                  '#ffffff',
 
                 padding:
                   '11px 18px',
@@ -2515,10 +2353,13 @@ _Your Network Solution_`;
                   '700',
 
                 border:
-                  '1px solid #334155',
+                  savedCustomer
+                    ? 'none'
+                    : '1px solid #334155',
 
                 cursor:
-                  loading
+                  loading ||
+                  serialLoading
                     ? 'not-allowed'
                     : 'pointer',
 
@@ -2532,25 +2373,36 @@ _Your Network Solution_`;
                   '7px'
               }}
             >
-              <RotateCcw
-                size={16}
-              />
-
-              ری سیٹ
+              {savedCustomer ? (
+                <>
+                  <UserPlus size={16} />
+                  نیا کسٹمر
+                </>
+              ) : (
+                <>
+                  <RotateCcw size={16} />
+                  ری سیٹ
+                </>
+              )}
             </button>
+
+            {/* SAVE ONLY */}
 
             <button
               type="submit"
               disabled={
                 loading ||
                 packagesLoading ||
-                serialLoading
+                serialLoading ||
+                !!savedCustomer
               }
               style={{
                 background:
-                  loading ||
-                  packagesLoading ||
-                  serialLoading
+                  savedCustomer
+                    ? '#14532d'
+                    : loading ||
+                      packagesLoading ||
+                      serialLoading
                     ? '#155e75'
                     : 'linear-gradient(135deg, #0891b2, #2563eb)',
 
@@ -2575,7 +2427,8 @@ _Your Network Solution_`;
                 cursor:
                   loading ||
                   packagesLoading ||
-                  serialLoading
+                  serialLoading ||
+                  savedCustomer
                     ? 'not-allowed'
                     : 'pointer',
 
@@ -2601,16 +2454,82 @@ _Your Network Solution_`;
 
                   محفوظ ہو رہا ہے...
                 </>
+              ) : savedCustomer ? (
+                <>
+                  <CheckCircle2 size={16} />
+                  محفوظ ہو گیا
+                </>
               ) : (
                 <>
-                  <Save
-                    size={16}
-                  />
-
-                  محفوظ کریں اور واٹس ایپ بھیجیں
+                  <Save size={16} />
+                  محفوظ کریں
                 </>
               )}
             </button>
+
+            {/* WHATSAPP SEPARATE */}
+
+            <button
+              type="button"
+              onClick={
+                handleSendWhatsApp
+              }
+              disabled={
+                !savedCustomer
+              }
+              style={{
+                background:
+                  savedCustomer
+                    ? 'linear-gradient(135deg, #16a34a, #22c55e)'
+                    : '#334155',
+
+                color:
+                  '#ffffff',
+
+                padding:
+                  '11px 22px',
+
+                borderRadius:
+                  '10px',
+
+                fontSize:
+                  '12px',
+
+                fontWeight:
+                  '800',
+
+                border:
+                  'none',
+
+                cursor:
+                  savedCustomer
+                    ? 'pointer'
+                    : 'not-allowed',
+
+                display:
+                  'flex',
+
+                alignItems:
+                  'center',
+
+                gap:
+                  '7px',
+
+                opacity:
+                  savedCustomer
+                    ? 1
+                    : 0.5,
+
+                boxShadow:
+                  savedCustomer
+                    ? '0 8px 25px rgba(34,197,94,.25)'
+                    : 'none'
+              }}
+            >
+              <Send size={16} />
+              واٹس ایپ میسج بھیجیں
+            </button>
+
           </div>
         </form>
       </div>
