@@ -10,11 +10,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Send,
-  WalletCards,
   Cable,
-  CalendarDays,
-  Banknote,
-  FileText,
   User,
   Gauge
 } from 'lucide-react';
@@ -46,6 +42,9 @@ interface CustomerType {
   connection_charges?: number;
   package_name?: string | null;
   speed?: string | null;
+
+  // Customer Portal Password
+  password?: string | null;
 }
 
 interface LatestCollectionType {
@@ -55,10 +54,18 @@ interface LatestCollectionType {
 }
 
 /* =========================================================
+   CONSTANTS
+========================================================= */
+
+const PORTAL_URL =
+  'https://khanfiber.vercel.app';
+
+/* =========================================================
    PAGE
 ========================================================= */
 
 export default function BillCollection() {
+
   /* =======================================================
      CUSTOMER STATES
   ======================================================= */
@@ -74,8 +81,10 @@ export default function BillCollection() {
     setSelectedCustomer
   ] = useState<CustomerType | null>(null);
 
-  const [customersLoading, setCustomersLoading] =
-    useState(true);
+  const [
+    customersLoading,
+    setCustomersLoading
+  ] = useState(true);
 
   /* =======================================================
      BILL STATES
@@ -115,7 +124,9 @@ export default function BillCollection() {
   const [
     paymentMethod,
     setPaymentMethod
-  ] = useState<PaymentMethod>('cash');
+  ] = useState<PaymentMethod>(
+    'cash'
+  );
 
   const [
     paidAmount,
@@ -136,8 +147,10 @@ export default function BillCollection() {
      UI STATES
   ======================================================= */
 
-  const [loading, setLoading] =
-    useState(false);
+  const [
+    loading,
+    setLoading
+  ] = useState(false);
 
   const [
     customerLoading,
@@ -159,9 +172,11 @@ export default function BillCollection() {
   ======================================================= */
 
   const loadCustomers = async () => {
+
     setCustomersLoading(true);
 
     try {
+
       const {
         data,
         error
@@ -178,11 +193,15 @@ export default function BillCollection() {
           monthly_price,
           connection_charges,
           package_name,
-          speed
+          speed,
+          password
         `)
-        .order('full_name', {
-          ascending: true
-        });
+        .order(
+          'full_name',
+          {
+            ascending: true
+          }
+        );
 
       if (error) {
         throw error;
@@ -191,7 +210,9 @@ export default function BillCollection() {
       setCustomers(
         (data || []) as CustomerType[]
       );
+
     } catch (err: any) {
+
       console.error(
         'Customer Load Error:',
         err
@@ -203,8 +224,11 @@ export default function BillCollection() {
           'Unknown error'
         }`
       );
+
     } finally {
+
       setCustomersLoading(false);
+
     }
   };
 
@@ -218,6 +242,7 @@ export default function BillCollection() {
 
   const filteredCustomers =
     useMemo(() => {
+
       const search =
         searchTerm
           .trim()
@@ -229,6 +254,7 @@ export default function BillCollection() {
 
       return customers
         .filter(customer => {
+
           const fullName =
             customer.full_name
               ?.toLowerCase() || '';
@@ -250,8 +276,10 @@ export default function BillCollection() {
             serial.includes(search) ||
             phone.includes(search)
           );
+
         })
         .slice(0, 15);
+
     }, [
       customers,
       searchTerm
@@ -265,7 +293,10 @@ export default function BillCollection() {
     async (
       customer: CustomerType
     ) => {
-      setSelectedCustomer(customer);
+
+      setSelectedCustomer(
+        customer
+      );
 
       setSearchTerm(
         customer.full_name ||
@@ -285,6 +316,7 @@ export default function BillCollection() {
       setPaymentNote('');
 
       try {
+
         const monthly =
           Number(
             customer.monthly_price || 0
@@ -292,10 +324,13 @@ export default function BillCollection() {
 
         const connection =
           Number(
-            customer.connection_charges || 0
+            customer.connection_charges ||
+            0
           );
 
-        setMonthlyBill(monthly);
+        setMonthlyBill(
+          monthly
+        );
 
         setConnectionCharges(
           connection
@@ -319,9 +354,12 @@ export default function BillCollection() {
             'customer_id',
             customer.id
           )
-          .order('id', {
-            ascending: false
-          })
+          .order(
+            'id',
+            {
+              ascending: false
+            }
+          )
           .limit(1);
 
         if (error) {
@@ -331,17 +369,14 @@ export default function BillCollection() {
         const latest =
           data &&
           data.length > 0
-            ? (data[0] as LatestCollectionType)
+            ? (
+                data[0] as
+                  LatestCollectionType
+              )
             : null;
 
         /* ===============================================
            PREVIOUS ARREARS
-
-           If collection exists:
-           use last remaining balance.
-
-           If first collection:
-           connection charges become previous dues.
         =============================================== */
 
         const previous =
@@ -353,27 +388,28 @@ export default function BillCollection() {
             : connection;
 
         setPreviousArrears(
-          Math.max(0, previous)
+          Math.max(
+            0,
+            previous
+          )
         );
 
         setLatestRemaining(
-          Math.max(0, previous)
+          Math.max(
+            0,
+            previous
+          )
         );
 
         /* ===============================================
            DEFAULT CATEGORY
-
-           First payment with connection charges:
-           Connection Charges
-
-           Otherwise:
-           Monthly Charges
         =============================================== */
 
         if (
           !latest &&
           connection > 0
         ) {
+
           setIncomeCategory(
             'connection_charges'
           );
@@ -381,7 +417,9 @@ export default function BillCollection() {
           setPaidAmount(
             String(connection)
           );
+
         } else {
+
           setIncomeCategory(
             'monthly_charges'
           );
@@ -389,8 +427,11 @@ export default function BillCollection() {
           setPaidAmount(
             String(monthly)
           );
+
         }
+
       } catch (err: any) {
+
         console.error(
           'Customer Billing Error:',
           err
@@ -402,8 +443,11 @@ export default function BillCollection() {
             'Unknown error'
           }`
         );
+
       } finally {
+
         setCustomerLoading(false);
+
       }
     };
 
@@ -413,6 +457,7 @@ export default function BillCollection() {
 
   const selectedCategoryDue =
     useMemo(() => {
+
       if (!selectedCustomer) {
         return 0;
       }
@@ -421,13 +466,6 @@ export default function BillCollection() {
         incomeCategory ===
         'connection_charges'
       ) {
-        /*
-          For first collection:
-          connection charges.
-
-          If arrears exist:
-          available previous arrears.
-        */
 
         if (
           latestRemaining > 0
@@ -439,6 +477,7 @@ export default function BillCollection() {
       }
 
       return monthlyBill;
+
     }, [
       selectedCustomer,
       incomeCategory,
@@ -453,6 +492,7 @@ export default function BillCollection() {
 
   const totalOutstanding =
     useMemo(() => {
+
       if (!selectedCustomer) {
         return 0;
       }
@@ -467,6 +507,7 @@ export default function BillCollection() {
           monthlyBill
         )
       );
+
     }, [
       selectedCustomer,
       previousArrears,
@@ -479,8 +520,11 @@ export default function BillCollection() {
 
   const numericPaid =
     useMemo(() => {
+
       const amount =
-        Number(paidAmount || 0);
+        Number(
+          paidAmount || 0
+        );
 
       if (
         Number.isNaN(amount)
@@ -489,19 +533,24 @@ export default function BillCollection() {
       }
 
       return amount;
-    }, [paidAmount]);
+
+    }, [
+      paidAmount
+    ]);
 
   /* =======================================================
-     REMAINING
+     REMAINING BALANCE
   ======================================================= */
 
   const remainingBalance =
     useMemo(() => {
+
       return Math.max(
         0,
         totalOutstanding -
-          numericPaid
+        numericPaid
       );
+
     }, [
       totalOutstanding,
       numericPaid
@@ -514,12 +563,16 @@ export default function BillCollection() {
   const handleCategoryChange = (
     value: IncomeCategory
   ) => {
-    setIncomeCategory(value);
+
+    setIncomeCategory(
+      value
+    );
 
     if (
       value ===
       'connection_charges'
     ) {
+
       const amount =
         latestRemaining > 0
           ? latestRemaining
@@ -530,12 +583,15 @@ export default function BillCollection() {
           ? String(amount)
           : ''
       );
+
     } else {
+
       setPaidAmount(
         monthlyBill > 0
           ? String(monthlyBill)
           : ''
       );
+
     }
   };
 
@@ -547,18 +603,23 @@ export default function BillCollection() {
     async (
       e: React.FormEvent
     ) => {
+
       e.preventDefault();
 
       if (loading) return;
 
       setErrorMessage('');
+
       setIsSuccess(false);
 
       /* ===============================================
-         VALIDATIONS
+         VALIDATION
       =============================================== */
 
-      if (!selectedCustomer) {
+      if (
+        !selectedCustomer
+      ) {
+
         setErrorMessage(
           'براہِ کرم پہلے صارف منتخب کریں۔'
         );
@@ -566,7 +627,10 @@ export default function BillCollection() {
         return;
       }
 
-      if (numericPaid <= 0) {
+      if (
+        numericPaid <= 0
+      ) {
+
         setErrorMessage(
           'جمع شدہ رقم صفر سے زیادہ ہونی چاہیے۔'
         );
@@ -578,6 +642,7 @@ export default function BillCollection() {
         numericPaid >
         totalOutstanding
       ) {
+
         setErrorMessage(
           `جمع رقم کل واجبات Rs ${totalOutstanding.toLocaleString()} سے زیادہ نہیں ہو سکتی۔`
         );
@@ -588,8 +653,9 @@ export default function BillCollection() {
       setLoading(true);
 
       try {
+
         /* ===============================================
-           GENERATE RECEIPT NUMBER
+           RECEIPT NUMBER
         =============================================== */
 
         const generatedReceipt =
@@ -597,7 +663,7 @@ export default function BillCollection() {
           `HFN-${Date.now()}`;
 
         /* ===============================================
-           INSERT COLLECTION
+           SAVE COLLECTION
         =============================================== */
 
         const {
@@ -657,6 +723,7 @@ export default function BillCollection() {
           selectedCustomer.phone;
 
         if (targetPhone) {
+
           const categoryText =
             incomeCategory ===
             'connection_charges'
@@ -664,7 +731,8 @@ export default function BillCollection() {
               : 'ماہانہ چارجز';
 
           const paymentMethodText =
-            paymentMethod === 'cash'
+            paymentMethod ===
+            'cash'
               ? 'کیش'
               : paymentMethod ===
                 'easypaisa'
@@ -677,18 +745,42 @@ export default function BillCollection() {
               ? 'بینک'
               : 'راست';
 
-          const whatsappMsg =
-`🌐 *ONE CLICK - HAIDER FIBER NETWORK* 🌐
+          /* =============================================
+             CUSTOMER PORTAL LOGIN
+          ============================================= */
 
-🧾 *ادائیگی کی رسید*
+          const portalUsername =
+            selectedCustomer.serial_number ||
+            selectedCustomer.pppoe_username ||
+            '-';
+
+          const portalPassword =
+            selectedCustomer.password ||
+            '12345';
+
+          const currentDate =
+            new Date()
+              .toLocaleDateString(
+                'en-GB'
+              );
+
+          /* =============================================
+             COMPLETE WHATSAPP MESSAGE
+          ============================================= */
+
+          const whatsappMsg =
+`🌐 *ONE CLICK | HAIDER FIBER NETWORK*
+━━━━━━━━━━━━━━━━━━
+
+🧾 *ادائیگی کی رسید / PAYMENT RECEIPT*
 
 محترم *${selectedCustomer.full_name}*!
 
 آپ کی ادائیگی کامیابی سے ریکارڈ کر لی گئی ہے۔
 
-━━━━━━━━━━━━━━
-📋 *Payment Details*
-━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━
+💰 *ادائیگی کی تفصیلات*
+━━━━━━━━━━━━━━━━━━
 
 🆔 *Customer ID:* ${selectedCustomer.serial_number || '-'}
 
@@ -700,32 +792,123 @@ export default function BillCollection() {
 
 🧾 *Receipt No:* ${generatedReceipt}
 
-💰 *جمع شدہ رقم:* Rs ${numericPaid.toLocaleString()}
+💵 *جمع شدہ رقم:*
+*Rs ${numericPaid.toLocaleString()}*
 
-📌 *کل واجبات:* Rs ${totalOutstanding.toLocaleString()}
+📌 *کل واجبات:*
+Rs ${totalOutstanding.toLocaleString()}
 
-🔻 *بقیہ واجبات:* Rs ${remainingBalance.toLocaleString()}
+🔻 *بقیہ واجبات:*
+*Rs ${remainingBalance.toLocaleString()}*
 
-━━━━━━━━━━━━━━
+📅 *تاریخ:* ${currentDate}
+
+━━━━━━━━━━━━━━━━━━
+📱 *CUSTOMER PORTAL / APP*
+━━━━━━━━━━━━━━━━━━
+
+اپنے انٹرنیٹ کنکشن کی مکمل معلومات، بل اور اکاؤنٹ دیکھنے کے لیے ہمارا Customer Portal استعمال کریں۔
+
+🌐 *Web Portal Address:*
+${PORTAL_URL}
+
+━━━━━━━━━━━━━━━━━━
+🔐 *آپ کی Login Details*
+━━━━━━━━━━━━━━━━━━
+
+👤 *User / Customer ID:*
+${portalUsername}
+
+🔑 *Password:*
+${portalPassword}
+
+اوپر دیے گئے User اور Password کے ذریعے Portal میں Login کریں۔
+
+━━━━━━━━━━━━━━━━━━
+💳 *آن لائن بل جمع کروانے کا طریقہ*
+━━━━━━━━━━━━━━━━━━
+
+اگر آپ اگلا بل Online جمع کروانا چاہتے ہیں تو:
+
+1️⃣ اوپر دیے گئے Portal کو کھولیں۔
+
+2️⃣ اپنے User ID اور Password سے Login کریں۔
+
+3️⃣ اپنے موجودہ بل اور بقایا رقم کو چیک کریں۔
+
+4️⃣ *Pay Bill / Online Payment* کے آپشن میں جائیں۔
+
+5️⃣ دستیاب Payment Method منتخب کریں۔
+
+6️⃣ رقم ادا کرنے کے بعد Transaction ID / Receipt کی معلومات درج کریں۔
+
+7️⃣ اپنی Payment Submit کریں۔
+
+8️⃣ Payment کی تصدیق کے بعد آپ اپنے Portal میں Payment Status دیکھ سکتے ہیں۔
+
+━━━━━━━━━━━━━━━━━━
+📡 *کنکشن کی معلومات*
+━━━━━━━━━━━━━━━━━━
+
+اپنے Portal میں Login کر کے آپ اپنے انٹرنیٹ کنکشن سے متعلق معلومات دیکھ سکتے ہیں، جن میں:
+
+✅ Customer ID
+✅ Internet Package
+✅ Internet Speed
+✅ موجودہ بل
+✅ بقایا رقم
+✅ Payment Status
+✅ Payment History
+
+شامل ہیں۔
+
+━━━━━━━━━━━━━━━━━━
+🛠️ *شکایت / SUPPORT*
+━━━━━━━━━━━━━━━━━━
+
+اگر آپ کو:
+
+⚠️ انٹرنیٹ بند ہونے
+⚠️ سپیڈ کے مسئلے
+⚠️ کنکشن کے مسئلے
+⚠️ بل یا Payment کے مسئلے
+
+کا سامنا ہو تو Customer Portal میں Login کر کے اپنی شکایت درج کریں۔
+
+ہماری ٹیم آپ کی شکایت کا ریکارڈ دیکھ کر کارروائی کر سکے گی۔
+
+━━━━━━━━━━━━━━━━━━
+📲 *ہماری App انسٹال کریں*
+━━━━━━━━━━━━━━━━━━
+
+اپنے کنکشن کی معلومات، بل کی ادائیگی اور شکایات کے لیے ہمارا Portal اپنے موبائل میں App کے طور پر Install/Add to Home Screen کریں۔
+
+اس سے آپ One Click Portal کو موبائل سے آسانی سے استعمال کر سکیں گے۔
+
+━━━━━━━━━━━━━━━━━━
 
 آپ کی ادائیگی کا شکریہ ❤️
 
-*One Click*
+*ONE CLICK*
 *Haider Fiber Network (SMC-Private) Limited*
-Your Network Solution`;
+*Your Network Solution*`;
 
           try {
+
             openWhatsAppDirect(
               targetPhone,
               whatsappMsg
             );
+
           } catch (
             whatsappError
           ) {
+
             console.error(
               'WhatsApp Error:',
               whatsappError
             );
+
           }
         }
 
@@ -750,7 +933,9 @@ Your Network Solution`;
         setTimeout(() => {
           setIsSuccess(false);
         }, 5000);
+
       } catch (err: any) {
+
         console.error(
           'Collection Save Error:',
           err
@@ -762,8 +947,11 @@ Your Network Solution`;
             'نامعلوم خرابی'
           }`
         );
+
       } finally {
+
         setLoading(false);
+
       }
     };
 
@@ -773,29 +961,50 @@ Your Network Solution`;
 
   const inputStyle:
     React.CSSProperties = {
+
       width: '100%',
+
       background:
         'linear-gradient(135deg,#071525,#091b2d)',
+
       border:
         '1px solid #1e4663',
+
       color: '#ffffff',
+
       padding:
         '11px 12px',
+
       borderRadius:
         '10px',
-      fontSize: '12px',
+
+      fontSize:
+        '12px',
+
       boxSizing:
         'border-box',
-      outline: 'none'
+
+      outline:
+        'none'
     };
 
   const labelStyle:
     React.CSSProperties = {
-      display: 'block',
-      fontSize: '11px',
-      color: '#94a3b8',
-      fontWeight: '700',
-      marginBottom: '5px'
+
+      display:
+        'block',
+
+      fontSize:
+        '11px',
+
+      color:
+        '#94a3b8',
+
+      fontWeight:
+        '700',
+
+      marginBottom:
+        '5px'
     };
 
   /* =======================================================
@@ -803,17 +1012,31 @@ Your Network Solution`;
   ======================================================= */
 
   return (
+
     <Layout showNavButtons={true}>
+
       <div
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '14px',
-          width: '100%',
-          maxWidth: '1200px',
-          margin: '0 auto'
+          display:
+            'flex',
+
+          flexDirection:
+            'column',
+
+          gap:
+            '14px',
+
+          width:
+            '100%',
+
+          maxWidth:
+            '1200px',
+
+          margin:
+            '0 auto'
         }}
       >
+
         {/* =================================================
             HEADER
         ================================================= */}
@@ -822,42 +1045,80 @@ Your Network Solution`;
           style={{
             background:
               'linear-gradient(135deg,#081a2c,#0b2035 55%,#09283a)',
+
             border:
               '1px solid #164e63',
-            padding: '16px',
-            borderRadius: '17px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '11px',
+
+            padding:
+              '16px',
+
+            borderRadius:
+              '17px',
+
+            display:
+              'flex',
+
+            alignItems:
+              'center',
+
+            gap:
+              '11px',
+
             boxShadow:
               '0 10px 35px rgba(0,0,0,.20)'
           }}
         >
+
           <div
             style={{
-              width: '46px',
-              height: '46px',
-              borderRadius: '13px',
+              width:
+                '46px',
+
+              height:
+                '46px',
+
+              borderRadius:
+                '13px',
+
               background:
                 'rgba(16,185,129,.12)',
+
               border:
                 '1px solid rgba(52,211,153,.25)',
-              color: '#34d399',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+
+              color:
+                '#34d399',
+
+              display:
+                'flex',
+
+              alignItems:
+                'center',
+
+              justifyContent:
+                'center'
             }}
           >
+
             <Receipt size={23} />
+
           </div>
 
           <div>
+
             <h2
               style={{
-                margin: 0,
-                fontSize: '17px',
-                fontWeight: '800',
-                color: '#f8fafc'
+                margin:
+                  0,
+
+                fontSize:
+                  '17px',
+
+                fontWeight:
+                  '800',
+
+                color:
+                  '#f8fafc'
               }}
             >
               بل وصولی
@@ -865,14 +1126,21 @@ Your Network Solution`;
 
             <p
               style={{
-                margin: '3px 0 0',
-                fontSize: '10px',
-                color: '#64748b'
+                margin:
+                  '3px 0 0',
+
+                fontSize:
+                  '10px',
+
+                color:
+                  '#64748b'
               }}
             >
               Monthly & Connection Charges Collection
             </p>
+
           </div>
+
         </div>
 
         {/* =================================================
@@ -880,25 +1148,46 @@ Your Network Solution`;
         ================================================= */}
 
         {isSuccess && (
+
           <div
             style={{
               background:
                 'rgba(16,185,129,.10)',
+
               border:
                 '1px solid rgba(16,185,129,.45)',
-              color: '#34d399',
-              padding: '11px 13px',
-              borderRadius: '11px',
-              fontSize: '11px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '7px'
+
+              color:
+                '#34d399',
+
+              padding:
+                '11px 13px',
+
+              borderRadius:
+                '11px',
+
+              fontSize:
+                '11px',
+
+              display:
+                'flex',
+
+              alignItems:
+                'center',
+
+              gap:
+                '7px'
             }}
           >
-            <CheckCircle2 size={16} />
+
+            <CheckCircle2
+              size={16}
+            />
 
             بل کامیابی سے محفوظ ہو گیا اور انکم رپورٹ میں شامل ہو گیا ہے۔
+
           </div>
+
         )}
 
         {/* =================================================
@@ -906,25 +1195,46 @@ Your Network Solution`;
         ================================================= */}
 
         {errorMessage && (
+
           <div
             style={{
               background:
                 'rgba(239,68,68,.10)',
+
               border:
                 '1px solid rgba(239,68,68,.45)',
-              color: '#f87171',
-              padding: '11px 13px',
-              borderRadius: '11px',
-              fontSize: '11px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '7px'
+
+              color:
+                '#f87171',
+
+              padding:
+                '11px 13px',
+
+              borderRadius:
+                '11px',
+
+              fontSize:
+                '11px',
+
+              display:
+                'flex',
+
+              alignItems:
+                'center',
+
+              gap:
+                '7px'
             }}
           >
-            <AlertCircle size={16} />
+
+            <AlertCircle
+              size={16}
+            />
 
             {errorMessage}
+
           </div>
+
         )}
 
         {/* =================================================
@@ -935,16 +1245,23 @@ Your Network Solution`;
           style={{
             background:
               'linear-gradient(145deg,#0b1b2e,#0b2034)',
+
             border:
               '1px solid #183a55',
-            borderRadius: '15px',
-            padding: '14px'
+
+            borderRadius:
+              '15px',
+
+            padding:
+              '14px'
           }}
         >
+
           <label
             style={{
               ...labelStyle,
-              color: '#67e8f9'
+              color:
+                '#67e8f9'
             }}
           >
             صارف تلاش کریں
@@ -952,14 +1269,22 @@ Your Network Solution`;
 
           <div
             style={{
-              position: 'relative'
+              position:
+                'relative'
             }}
           >
+
             <input
               type="text"
+
               placeholder="نام، Customer ID، PPPoE یا فون..."
-              value={searchTerm}
+
+              value={
+                searchTerm
+              }
+
               onChange={e => {
+
                 setSearchTerm(
                   e.target.value
                 );
@@ -967,20 +1292,31 @@ Your Network Solution`;
                 setSelectedCustomer(
                   null
                 );
+
               }}
+
               style={{
                 ...inputStyle,
-                paddingRight: '38px'
+                paddingRight:
+                  '38px'
               }}
             />
 
             <Search
               size={16}
+
               style={{
-                position: 'absolute',
-                right: '12px',
-                top: '12px',
-                color: '#64748b'
+                position:
+                  'absolute',
+
+                right:
+                  '12px',
+
+                top:
+                  '12px',
+
+                color:
+                  '#64748b'
               }}
             />
 
@@ -988,60 +1324,92 @@ Your Network Solution`;
               !selectedCustomer &&
               filteredCustomers.length >
                 0 && (
+
                 <div
                   style={{
-                    position: 'absolute',
-                    top: '48px',
-                    left: 0,
-                    right: 0,
-                    zIndex: 50,
-                    background: '#071525',
+                    position:
+                      'absolute',
+
+                    top:
+                      '48px',
+
+                    left:
+                      0,
+
+                    right:
+                      0,
+
+                    zIndex:
+                      50,
+
+                    background:
+                      '#071525',
+
                     border:
                       '1px solid #164e63',
+
                     borderRadius:
                       '10px',
+
                     maxHeight:
                       '240px',
+
                     overflowY:
                       'auto',
+
                     boxShadow:
                       '0 15px 35px rgba(0,0,0,.40)'
                   }}
                 >
+
                   {filteredCustomers.map(
                     customer => (
+
                       <div
                         key={
                           customer.id
                         }
+
                         onClick={() =>
                           handleSelectCustomer(
                             customer
                           )
                         }
+
                         style={{
                           padding:
                             '10px 12px',
+
                           borderBottom:
                             '1px solid #14283c',
+
                           cursor:
                             'pointer',
+
                           display:
                             'flex',
+
                           justifyContent:
                             'space-between',
+
                           alignItems:
                             'center',
-                          gap: '10px'
+
+                          gap:
+                            '10px'
                         }}
                       >
+
                         <div>
+
                           <div
                             style={{
                               color:
                                 '#ffffff',
+
                               fontSize:
                                 '11px',
+
                               fontWeight:
                                 '800'
                             }}
@@ -1055,23 +1423,30 @@ Your Network Solution`;
                             style={{
                               color:
                                 '#64748b',
+
                               fontSize:
                                 '9px',
+
                               marginTop:
                                 '2px'
                             }}
                           >
-                            {customer.serial_number ||
-                              '-'}
+                            {
+                              customer.serial_number ||
+                              '-'
+                            }
                           </div>
+
                         </div>
 
                         <div
                           style={{
                             color:
                               '#22d3ee',
+
                             fontSize:
                               '10px',
+
                             direction:
                               'ltr'
                           }}
@@ -1080,26 +1455,42 @@ Your Network Solution`;
                             customer.pppoe_username
                           }
                         </div>
+
                       </div>
+
                     )
                   )}
+
                 </div>
+
               )}
 
             {customersLoading && (
+
               <Loader2
                 size={15}
+
                 className="animate-spin"
+
                 style={{
                   position:
                     'absolute',
-                  left: '12px',
-                  top: '12px',
-                  color: '#22d3ee'
+
+                  left:
+                    '12px',
+
+                  top:
+                    '12px',
+
+                  color:
+                    '#22d3ee'
                 }}
               />
+
             )}
+
           </div>
+
         </div>
 
         {/* =================================================
@@ -1107,56 +1498,76 @@ Your Network Solution`;
         ================================================= */}
 
         {selectedCustomer && (
+
           <div
             style={{
-              display: 'grid',
+              display:
+                'grid',
+
               gridTemplateColumns:
                 'repeat(auto-fit, minmax(150px,1fr))',
-              gap: '9px'
+
+              gap:
+                '9px'
             }}
           >
+
             <InfoCard
               title="Customer ID"
+
               value={
                 selectedCustomer.serial_number ||
                 '-'
               }
+
               icon={
                 <User size={17} />
               }
+
               color="#22d3ee"
             />
 
             <InfoCard
               title="Package"
+
               value={
                 selectedCustomer.package_name ||
                 '-'
               }
+
               icon={
                 <Gauge size={17} />
               }
+
               color="#60a5fa"
             />
 
             <InfoCard
               title="Monthly Bill"
+
               value={`Rs ${monthlyBill.toLocaleString()}`}
+
               icon={
                 <Receipt size={17} />
               }
+
               color="#a78bfa"
             />
 
             <InfoCard
               title="Previous / Connection Due"
+
               value={`Rs ${previousArrears.toLocaleString()}`}
+
               icon={
                 <Cable size={17} />
               }
+
               color="#fbbf24"
             />
+
           </div>
+
         )}
 
         {/* =================================================
@@ -1167,49 +1578,78 @@ Your Network Solution`;
           onSubmit={
             handleSaveBill
           }
+
           style={{
             background:
               'linear-gradient(145deg,#0b1b2e,#0b2034)',
+
             border:
               '1px solid #183a55',
-            borderRadius: '16px',
-            padding: '16px'
+
+            borderRadius:
+              '16px',
+
+            padding:
+              '16px'
           }}
         >
+
           {customerLoading ? (
+
             <div
               style={{
-                padding: '25px',
-                display: 'flex',
+                padding:
+                  '25px',
+
+                display:
+                  'flex',
+
                 justifyContent:
                   'center',
+
                 alignItems:
                   'center',
-                gap: '7px',
-                color: '#22d3ee',
-                fontSize: '11px'
+
+                gap:
+                  '7px',
+
+                color:
+                  '#22d3ee',
+
+                fontSize:
+                  '11px'
               }}
             >
+
               <Loader2
                 size={17}
                 className="animate-spin"
               />
 
               صارف کا بل لوڈ ہو رہا ہے...
+
             </div>
+
           ) : (
+
             <>
-              {/* CATEGORY */}
+
+              {/* ===========================================
+                  CATEGORY
+              =========================================== */}
 
               <div
                 style={{
-                  marginBottom: '16px'
+                  marginBottom:
+                    '16px'
                 }}
               >
+
                 <label
                   style={{
                     ...labelStyle,
-                    color: '#67e8f9'
+                    color:
+                      '#67e8f9'
                   }}
                 >
                   انکم کیٹیگری *
@@ -1217,19 +1657,28 @@ Your Network Solution`;
 
                 <div
                   style={{
-                    display: 'grid',
+                    display:
+                      'grid',
+
                     gridTemplateColumns:
                       'repeat(2, minmax(0,1fr))',
-                    gap: '8px'
+
+                    gap:
+                      '8px'
                   }}
                 >
+
+                  {/* MONTHLY */}
+
                   <button
                     type="button"
+
                     onClick={() =>
                       handleCategoryChange(
                         'monthly_charges'
                       )
                     }
+
                     style={{
                       background:
                         incomeCategory ===
@@ -1273,23 +1722,28 @@ Your Network Solution`;
                       alignItems:
                         'center',
 
-                      gap: '6px'
+                      gap:
+                        '6px'
                     }}
                   >
-                    <Receipt
-                      size={15}
-                    />
+
+                    <Receipt size={15} />
 
                     ماہانہ چارجز
+
                   </button>
+
+                  {/* CONNECTION */}
 
                   <button
                     type="button"
+
                     onClick={() =>
                       handleCategoryChange(
                         'connection_charges'
                       )
                     }
+
                     style={{
                       background:
                         incomeCategory ===
@@ -1333,31 +1787,42 @@ Your Network Solution`;
                       alignItems:
                         'center',
 
-                      gap: '6px'
+                      gap:
+                        '6px'
                     }}
                   >
-                    <Cable
-                      size={15}
-                    />
+
+                    <Cable size={15} />
 
                     کنکشن چارجز
+
                   </button>
+
                 </div>
+
               </div>
 
-              {/* GRID */}
+              {/* ===========================================
+                  FORM GRID
+              =========================================== */}
 
               <div
                 style={{
-                  display: 'grid',
+                  display:
+                    'grid',
+
                   gridTemplateColumns:
                     'repeat(auto-fit,minmax(200px,1fr))',
-                  gap: '12px'
+
+                  gap:
+                    '12px'
                 }}
               >
+
                 {/* CATEGORY DUE */}
 
                 <div>
+
                   <label
                     style={
                       labelStyle
@@ -1368,22 +1833,29 @@ Your Network Solution`;
 
                   <input
                     readOnly
+
                     value={`Rs ${selectedCategoryDue.toLocaleString()}`}
+
                     style={{
                       ...inputStyle,
+
                       color:
                         '#67e8f9',
+
                       border:
                         '1px solid #0891b2',
+
                       fontWeight:
                         '800'
                     }}
                   />
+
                 </div>
 
                 {/* TOTAL */}
 
                 <div>
+
                   <label
                     style={
                       labelStyle
@@ -1394,25 +1866,33 @@ Your Network Solution`;
 
                   <input
                     readOnly
+
                     value={`Rs ${totalOutstanding.toLocaleString()}`}
+
                     style={{
                       ...inputStyle,
+
                       color:
                         '#fbbf24',
+
                       border:
                         '1px solid #d97706',
+
                       fontWeight:
                         '800'
                     }}
                   />
+
                 </div>
 
                 {/* PAID */}
 
                 <div>
+
                   <label
                     style={{
                       ...labelStyle,
+
                       color:
                         '#34d399'
                     }}
@@ -1422,33 +1902,43 @@ Your Network Solution`;
 
                   <input
                     type="number"
+
                     min="1"
+
                     value={
                       paidAmount
                     }
+
                     onChange={e =>
                       setPaidAmount(
-                        e.target
-                          .value
+                        e.target.value
                       )
                     }
+
                     placeholder="رقم درج کریں"
+
                     required
+
                     style={{
                       ...inputStyle,
+
                       border:
                         '1px solid #059669',
+
                       color:
                         '#34d399',
+
                       fontWeight:
                         '800'
                     }}
                   />
+
                 </div>
 
                 {/* REMAINING */}
 
                 <div>
+
                   <label
                     style={
                       labelStyle
@@ -1459,9 +1949,12 @@ Your Network Solution`;
 
                   <input
                     readOnly
+
                     value={`Rs ${remainingBalance.toLocaleString()}`}
+
                     style={{
                       ...inputStyle,
+
                       border:
                         remainingBalance >
                         0
@@ -1478,11 +1971,13 @@ Your Network Solution`;
                         '900'
                     }}
                   />
+
                 </div>
 
-                {/* METHOD */}
+                {/* PAYMENT METHOD */}
 
                 <div>
+
                   <label
                     style={
                       labelStyle
@@ -1495,18 +1990,22 @@ Your Network Solution`;
                     value={
                       paymentMethod
                     }
+
                     onChange={e =>
                       setPaymentMethod(
                         e.target
                           .value as PaymentMethod
                       )
                     }
+
                     style={{
                       ...inputStyle,
+
                       cursor:
                         'pointer'
                     }}
                   >
+
                     <option value="cash">
                       Cash
                     </option>
@@ -1526,12 +2025,15 @@ Your Network Solution`;
                     <option value="bank">
                       Bank
                     </option>
+
                   </select>
+
                 </div>
 
                 {/* RECEIPT */}
 
                 <div>
+
                   <label
                     style={
                       labelStyle
@@ -1542,30 +2044,39 @@ Your Network Solution`;
 
                   <input
                     type="text"
+
                     value={
                       receiptNumber
                     }
+
                     onChange={e =>
                       setReceiptNumber(
-                        e.target
-                          .value
+                        e.target.value
                       )
                     }
+
                     placeholder="خالی چھوڑیں تو Auto بنے گا"
+
                     style={
                       inputStyle
                     }
                   />
+
                 </div>
+
               </div>
 
-              {/* NOTE */}
+              {/* ===========================================
+                  NOTE
+              =========================================== */}
 
               <div
                 style={{
-                  marginTop: '12px'
+                  marginTop:
+                    '12px'
                 }}
               >
+
                 <label
                   style={
                     labelStyle
@@ -1576,41 +2087,57 @@ Your Network Solution`;
 
                 <textarea
                   rows={2}
+
                   value={
                     paymentNote
                   }
+
                   onChange={e =>
                     setPaymentNote(
                       e.target.value
                     )
                   }
+
                   placeholder="اختیاری نوٹ..."
+
                   style={{
                     ...inputStyle,
+
                     resize:
                       'vertical',
+
                     fontFamily:
                       'inherit'
                   }}
                 />
+
               </div>
 
-              {/* BUTTON */}
+              {/* ===========================================
+                  SAVE BUTTON
+              =========================================== */}
 
               <div
                 style={{
-                  display: 'flex',
+                  display:
+                    'flex',
+
                   justifyContent:
                     'flex-end',
-                  marginTop: '16px'
+
+                  marginTop:
+                    '16px'
                 }}
               >
+
                 <button
                   type="submit"
+
                   disabled={
                     loading ||
                     !selectedCustomer
                   }
+
                   style={{
                     background:
                       loading ||
@@ -1621,7 +2148,8 @@ Your Network Solution`;
                     color:
                       '#ffffff',
 
-                    border: 'none',
+                    border:
+                      'none',
 
                     padding:
                       '11px 18px',
@@ -1647,29 +2175,40 @@ Your Network Solution`;
                     alignItems:
                       'center',
 
-                    gap: '7px'
+                    gap:
+                      '7px'
                   }}
                 >
+
                   {loading ? (
+
                     <Loader2
                       size={15}
                       className="animate-spin"
                     />
+
                   ) : (
-                    <Send
-                      size={15}
-                    />
+
+                    <Send size={15} />
+
                   )}
 
                   {loading
                     ? 'محفوظ ہو رہا ہے...'
                     : 'بل محفوظ کریں اور رسید بھیجیں'}
+
                 </button>
+
               </div>
+
             </>
+
           )}
+
         </form>
+
       </div>
+
     </Layout>
   );
 }
@@ -1689,42 +2228,77 @@ function InfoCard({
   icon: React.ReactNode;
   color: string;
 }) {
+
   return (
+
     <div
       style={{
         background:
           'linear-gradient(145deg,#0b1b2e,#0b2034)',
+
         border:
           '1px solid #183a55',
-        borderRadius: '12px',
-        padding: '11px 12px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '9px'
+
+        borderRadius:
+          '12px',
+
+        padding:
+          '11px 12px',
+
+        display:
+          'flex',
+
+        alignItems:
+          'center',
+
+        gap:
+          '9px'
       }}
     >
+
       <div
         style={{
-          width: '34px',
-          height: '34px',
-          borderRadius: '9px',
+          width:
+            '34px',
+
+          height:
+            '34px',
+
+          borderRadius:
+            '9px',
+
           background:
             `${color}18`,
+
           color,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0
+
+          display:
+            'flex',
+
+          alignItems:
+            'center',
+
+          justifyContent:
+            'center',
+
+          flexShrink:
+            0
         }}
       >
+
         {icon}
+
       </div>
 
       <div>
+
         <div
           style={{
-            color: '#64748b',
-            fontSize: '9px'
+            color:
+              '#64748b',
+
+            fontSize:
+              '9px'
           }}
         >
           {title}
@@ -1733,14 +2307,23 @@ function InfoCard({
         <div
           style={{
             color,
-            fontSize: '11px',
-            fontWeight: '800',
-            marginTop: '2px'
+
+            fontSize:
+              '11px',
+
+            fontWeight:
+              '800',
+
+            marginTop:
+              '2px'
           }}
         >
           {value}
         </div>
+
       </div>
+
     </div>
+
   );
 }
