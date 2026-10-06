@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
 import { supabase } from '../../lib/supabaseClient';
+
 import {
   CreditCard,
   Send,
@@ -19,8 +20,8 @@ import {
   Banknote,
   CalendarDays,
   Hash,
-  CircleDollarSign,
-  RefreshCw
+  RefreshCw,
+  RotateCcw
 } from 'lucide-react';
 
 // ===========================================================
@@ -56,13 +57,28 @@ type PaymentMethod =
 
 interface PaymentHistoryItem {
   uniqueId: string;
-  source: 'collection' | 'online';
+
+  source:
+    | 'collection'
+    | 'online';
+
   amount: number;
+
   paymentMethod: string;
+
   transactionId: string;
+
   status: string;
+
   paymentDate: string;
+
   receiptUrl?: string | null;
+
+  isReversed?: boolean;
+
+  reversedAt?: string | null;
+
+  reversalReason?: string | null;
 }
 
 // ===========================================================
@@ -134,6 +150,7 @@ export default function PayBillPage() {
       title: 'Easypaisa',
       accountTitle: 'Asmatullah',
       accountNumber: '03457361106',
+
       note:
         'Easypaisa پر رقم بھیجنے کے بعد Transaction ID درج کریں یا رسید اپ لوڈ کریں۔'
     },
@@ -142,6 +159,7 @@ export default function PayBillPage() {
       title: 'JazzCash',
       accountTitle: 'Asmatullah',
       accountNumber: '03067303029',
+
       note:
         'JazzCash پر رقم بھیجنے کے بعد Transaction ID درج کریں یا رسید اپ لوڈ کریں۔'
     },
@@ -150,6 +168,7 @@ export default function PayBillPage() {
       title: 'Raast ID',
       accountTitle: 'Asmatullah',
       accountNumber: '03067303029',
+
       note:
         'Raast ID پر رقم بھیجنے کے بعد Transaction ID درج کریں یا رسید اپ لوڈ کریں۔'
     },
@@ -158,6 +177,7 @@ export default function PayBillPage() {
       title: 'SadaPay',
       accountTitle: 'Asmatullah',
       accountNumber: '03067311162',
+
       note:
         'SadaPay پر رقم بھیجنے کے بعد Transaction ID درج کریں یا رسید اپ لوڈ کریں۔'
     },
@@ -166,13 +186,14 @@ export default function PayBillPage() {
       title: 'NayaPay',
       accountTitle: 'Asmatullah',
       accountNumber: '03067311162',
+
       note:
         'NayaPay پر رقم بھیجنے کے بعد Transaction ID درج کریں یا رسید اپ لوڈ کریں۔'
     }
   };
 
   // =========================================================
-  // LOAD CUSTOMER + BILL + FULL HISTORY
+  // LOAD BILLING DATA
   // =========================================================
 
   const loadBillingData = async () => {
@@ -180,6 +201,10 @@ export default function PayBillPage() {
     setErrorMsg('');
 
     try {
+      // =====================================================
+      // LOGIN USER
+      // =====================================================
+
       const storedUser =
         localStorage.getItem('user');
 
@@ -238,7 +263,9 @@ export default function PayBillPage() {
 
       // =====================================================
       // COLLECTIONS
-      // Cash / Admin Collected Payments
+      //
+      // IMPORTANT:
+      // Reverse Payment columns بھی load ہو رہے ہیں
       // =====================================================
 
       const {
@@ -248,11 +275,20 @@ export default function PayBillPage() {
         .from('collections')
         .select(`
           id,
+          customer_id,
+          previous_arrears,
+          current_bill,
+          total_amount,
           paid_amount,
           remaining_balance,
           payment_date,
+          income_category,
           payment_method,
-          receipt_number
+          payment_note,
+          receipt_number,
+          is_reversed,
+          reversed_at,
+          reversal_reason
         `)
         .eq('customer_id', customerId)
         .order('id', {
@@ -274,6 +310,7 @@ export default function PayBillPage() {
         .from('online_payments')
         .select(`
           id,
+          customer_id,
           amount,
           payment_method,
           transaction_id,
@@ -291,18 +328,39 @@ export default function PayBillPage() {
       }
 
       // =====================================================
-      // BILL CALCULATION
+      // VALID COLLECTIONS
+      //
+      // Reversed collections یہاں سے مکمل exclude ہوں گی
+      // =====================================================
+
+      const validCollections =
+        (collections || []).filter(
+          (item: any) =>
+            item.is_reversed !== true
+        );
+
+      // =====================================================
+      // TOTAL PAID
+      //
+      // صرف NON-REVERSED payments
       // =====================================================
 
       const paidSum =
-        (collections || []).reduce(
-          (sum: number, item: any) =>
+        validCollections.reduce(
+          (
+            sum: number,
+            item: any
+          ) =>
             sum +
             Number(
               item.paid_amount || 0
             ),
           0
         );
+
+      // =====================================================
+      // CUSTOMER BILL
+      // =====================================================
 
       const monthlyBill =
         Number(
@@ -317,15 +375,23 @@ export default function PayBillPage() {
       let totalDue = 0;
       let previousArrears = 0;
 
+      // =====================================================
+      // BALANCE CALCULATION
+      //
+      // صرف آخری valid/non-reversed collection استعمال ہوگی
+      // =====================================================
+
       if (
-        collections &&
-        collections.length > 0
+        validCollections.length > 0
       ) {
+        const latestValidCollection =
+          validCollections[0];
+
         totalDue =
           Math.max(
             0,
             Number(
-              collections[0]
+              latestValidCollection
                 .remaining_balance || 0
             )
           );
@@ -336,6 +402,16 @@ export default function PayBillPage() {
             totalDue - monthlyBill
           );
       } else {
+        // ===================================================
+        // اگر کوئی valid collection باقی نہیں
+        // یعنی:
+        // 1) کبھی payment نہیں ہوئی
+        // یا
+        // 2) تمام payments reverse ہو چکی ہیں
+        //
+        // Initial bill واپس show ہوگا
+        // ===================================================
+
         previousArrears =
           connectionCharges;
 
@@ -345,7 +421,7 @@ export default function PayBillPage() {
       }
 
       // =====================================================
-      // PENDING PAYMENT
+      // PENDING ONLINE PAYMENT
       // =====================================================
 
       const hasPending =
@@ -362,7 +438,10 @@ export default function PayBillPage() {
       );
 
       // =====================================================
-      // CASH / COLLECTION HISTORY
+      // COLLECTION HISTORY
+      //
+      // Reversed records delete نہیں ہوں گے۔
+      // History میں REVERSED دکھیں گے۔
       // =====================================================
 
       const collectionHistory:
@@ -374,37 +453,59 @@ export default function PayBillPage() {
                 item.paid_amount || 0
               ) > 0
           )
-          .map((item: any) => ({
-            uniqueId:
-              `collection-${item.id}`,
+          .map(
+            (item: any) => {
+              const reversed =
+                item.is_reversed === true;
 
-            source:
-              'collection' as const,
+              return {
+                uniqueId:
+                  `collection-${item.id}`,
 
-            amount:
-              Number(
-                item.paid_amount || 0
-              ),
+                source:
+                  'collection' as const,
 
-            paymentMethod:
-              item.payment_method ||
-              'cash',
+                amount:
+                  Number(
+                    item.paid_amount || 0
+                  ),
 
-            transactionId:
-              item.receipt_number ||
-              `COL-${item.id}`,
+                paymentMethod:
+                  item.payment_method ||
+                  'cash',
 
-            status: 'paid',
+                transactionId:
+                  item.receipt_number ||
+                  `COL-${item.id}`,
 
-            paymentDate:
-              item.payment_date ||
-              '',
+                status:
+                  reversed
+                    ? 'reversed'
+                    : 'paid',
 
-            receiptUrl: null
-          }));
+                paymentDate:
+                  item.payment_date ||
+                  '',
+
+                receiptUrl:
+                  null,
+
+                isReversed:
+                  reversed,
+
+                reversedAt:
+                  item.reversed_at ||
+                  null,
+
+                reversalReason:
+                  item.reversal_reason ||
+                  null
+              };
+            }
+          );
 
       // =====================================================
-      // ONLINE HISTORY
+      // ONLINE PAYMENT HISTORY
       // =====================================================
 
       const onlineHistory:
@@ -440,30 +541,45 @@ export default function PayBillPage() {
 
             receiptUrl:
               item.receipt_url ||
+              null,
+
+            isReversed:
+              false,
+
+            reversedAt:
+              null,
+
+            reversalReason:
               null
           })
         );
 
       // =====================================================
-      // MERGE BOTH HISTORIES
+      // MERGE HISTORY
       // =====================================================
 
       const mergedHistory = [
         ...collectionHistory,
         ...onlineHistory
-      ].sort((a, b) => {
-        const dateA =
-          new Date(
-            a.paymentDate
-          ).getTime();
+      ].sort(
+        (a, b) => {
+          const dateA =
+            new Date(
+              a.paymentDate
+            ).getTime();
 
-        const dateB =
-          new Date(
-            b.paymentDate
-          ).getTime();
+          const dateB =
+            new Date(
+              b.paymentDate
+            ).getTime();
 
-        return dateB - dateA;
-      });
+          return dateB - dateA;
+        }
+      );
+
+      // =====================================================
+      // SET STATE
+      // =====================================================
 
       setPaymentHistory(
         mergedHistory
@@ -477,7 +593,8 @@ export default function PayBillPage() {
         monthlyBill,
         previousArrears,
         totalDue,
-        totalPaid: paidSum
+        totalPaid:
+          paidSum
       });
 
       setAmountPaid(
@@ -496,9 +613,15 @@ export default function PayBillPage() {
           'بل کی معلومات لوڈ نہیں ہو سکیں۔'
       );
     } finally {
-      setPageLoading(false);
+      setPageLoading(
+        false
+      );
     }
   };
+
+  // =========================================================
+  // INITIAL LOAD
+  // =========================================================
 
   useEffect(() => {
     loadBillingData();
@@ -514,7 +637,9 @@ export default function PayBillPage() {
     const file =
       e.target.files?.[0];
 
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
     if (
       !file.type.startsWith(
@@ -524,6 +649,7 @@ export default function PayBillPage() {
       setErrorMsg(
         'صرف تصویر اپ لوڈ کریں۔'
       );
+
       return;
     }
 
@@ -533,7 +659,9 @@ export default function PayBillPage() {
     const reader =
       new FileReader();
 
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(
+      file
+    );
 
     reader.onload = (
       event
@@ -552,7 +680,8 @@ export default function PayBillPage() {
         let height =
           img.height;
 
-        const maxWidth = 500;
+        const maxWidth =
+          500;
 
         if (
           width > maxWidth
@@ -564,7 +693,8 @@ export default function PayBillPage() {
                 width
             );
 
-          width = maxWidth;
+          width =
+            maxWidth;
         }
 
         const canvas =
@@ -650,28 +780,26 @@ export default function PayBillPage() {
         );
       };
 
-      img.onerror =
-        () => {
-          setCompressing(
-            false
-          );
-
-          setErrorMsg(
-            'تصویر پڑھنے میں خرابی پیش آئی۔'
-          );
-        };
-    };
-
-    reader.onerror =
-      () => {
+      img.onerror = () => {
         setCompressing(
           false
         );
 
         setErrorMsg(
-          'فائل پڑھنے میں خرابی پیش آئی۔'
+          'تصویر پڑھنے میں خرابی پیش آئی۔'
         );
       };
+    };
+
+    reader.onerror = () => {
+      setCompressing(
+        false
+      );
+
+      setErrorMsg(
+        'فائل پڑھنے میں خرابی پیش آئی۔'
+      );
+    };
   };
 
   // =========================================================
@@ -740,7 +868,10 @@ export default function PayBillPage() {
         return;
       }
 
-      setLoading(true);
+      setLoading(
+        true
+      );
+
       setErrorMsg('');
       setSuccessMsg('');
 
@@ -752,13 +883,16 @@ export default function PayBillPage() {
         const {
           data:
             existingPending,
+
           error:
             pendingCheckError
         } = await supabase
           .from(
             'online_payments'
           )
-          .select('id')
+          .select(
+            'id'
+          )
           .eq(
             'customer_id',
             customer.id
@@ -850,7 +984,6 @@ export default function PayBillPage() {
           null
         );
 
-        // History refresh
         await loadBillingData();
       } catch (
         err: any
@@ -872,7 +1005,10 @@ export default function PayBillPage() {
     };
 
   // =========================================================
-  // TOTAL HISTORY PAID
+  // PAID HISTORY TOTAL
+  //
+  // Reversed payments count نہیں ہوں گی
+  // Pending/Rejected بھی count نہیں ہوں گی
   // =========================================================
 
   const historyPaidTotal =
@@ -880,6 +1016,7 @@ export default function PayBillPage() {
       return paymentHistory
         .filter(
           item =>
+            !item.isReversed &&
             normalizeStatus(
               item.status
             ) === 'paid'
@@ -891,8 +1028,7 @@ export default function PayBillPage() {
           ) =>
             total +
             Number(
-              item.amount ||
-                0
+              item.amount || 0
             ),
           0
         );
@@ -904,7 +1040,9 @@ export default function PayBillPage() {
   // LOADING
   // =========================================================
 
-  if (pageLoading) {
+  if (
+    pageLoading
+  ) {
     return (
       <Layout
         showNavButtons={
@@ -928,7 +1066,8 @@ export default function PayBillPage() {
             flexDirection:
               'column',
 
-            gap: '10px',
+            gap:
+              '10px',
 
             color:
               '#38bdf8'
@@ -945,9 +1084,7 @@ export default function PayBillPage() {
                 '12px'
             }}
           >
-            بل اور ادائیگیوں
-            کی معلومات لوڈ ہو
-            رہی ہیں...
+            بل اور ادائیگیوں کی معلومات لوڈ ہو رہی ہیں...
           </span>
         </div>
       </Layout>
@@ -958,6 +1095,10 @@ export default function PayBillPage() {
     paymentDetails[
       paymentMethod
     ];
+
+  // =========================================================
+  // PAGE UI
+  // =========================================================
 
   return (
     <Layout
@@ -973,9 +1114,11 @@ export default function PayBillPage() {
           flexDirection:
             'column',
 
-          gap: '16px',
+          gap:
+            '16px',
 
-          width: '100%',
+          width:
+            '100%',
 
           maxWidth:
             '850px',
@@ -1011,7 +1154,8 @@ export default function PayBillPage() {
             justifyContent:
               'space-between',
 
-            gap: '10px'
+            gap:
+              '10px'
           }}
         >
           <div
@@ -1022,7 +1166,8 @@ export default function PayBillPage() {
               alignItems:
                 'center',
 
-              gap: '10px'
+              gap:
+                '10px'
             }}
           >
             <div
@@ -1048,7 +1193,8 @@ export default function PayBillPage() {
             <div>
               <h2
                 style={{
-                  margin: 0,
+                  margin:
+                    0,
 
                   fontSize:
                     '16px',
@@ -1060,8 +1206,7 @@ export default function PayBillPage() {
                     '900'
                 }}
               >
-                آن لائن بل
-                ادائیگی
+                آن لائن بل ادائیگی
               </h2>
 
               <p
@@ -1076,9 +1221,7 @@ export default function PayBillPage() {
                     '#93c5fd'
                 }}
               >
-                ONE CLICK •
-                HAIDER FIBER
-                NETWORK
+                ONE CLICK • HAIDER FIBER NETWORK
               </p>
             </div>
           </div>
@@ -1089,8 +1232,11 @@ export default function PayBillPage() {
               loadBillingData()
             }
             style={{
-              width: '36px',
-              height: '36px',
+              width:
+                '36px',
+
+              height:
+                '36px',
 
               borderRadius:
                 '10px',
@@ -1152,15 +1298,14 @@ export default function PayBillPage() {
                 gridTemplateColumns:
                   'repeat(auto-fit,minmax(145px,1fr))',
 
-                gap: '10px'
+                gap:
+                  '10px'
               }}
             >
               <InfoBox
                 icon={
                   <User
-                    size={
-                      15
-                    }
+                    size={15}
                   />
                 }
                 title="صارف"
@@ -1172,9 +1317,7 @@ export default function PayBillPage() {
               <InfoBox
                 icon={
                   <Receipt
-                    size={
-                      15
-                    }
+                    size={15}
                   />
                 }
                 title="HFN ID"
@@ -1187,9 +1330,7 @@ export default function PayBillPage() {
               <InfoBox
                 icon={
                   <Wifi
-                    size={
-                      15
-                    }
+                    size={15}
                   />
                 }
                 title="PPPoE"
@@ -1201,9 +1342,7 @@ export default function PayBillPage() {
               <InfoBox
                 icon={
                   <Wifi
-                    size={
-                      15
-                    }
+                    size={15}
                   />
                 }
                 title="Package"
@@ -1256,8 +1395,7 @@ export default function PayBillPage() {
                 '8px'
             }}
           >
-            واجبات و بل
-            تفصیلات
+            واجبات و بل تفصیلات
           </h3>
 
           <div
@@ -1268,7 +1406,8 @@ export default function PayBillPage() {
               gridTemplateColumns:
                 'repeat(auto-fit,minmax(140px,1fr))',
 
-              gap: '10px'
+              gap:
+                '10px'
             }}
           >
             <BillCard
@@ -1306,7 +1445,7 @@ export default function PayBillPage() {
         </div>
 
         {/* =================================================
-            PENDING
+            PENDING NOTICE
         ================================================= */}
 
         {pendingPayment && (
@@ -1333,7 +1472,8 @@ export default function PayBillPage() {
               display:
                 'flex',
 
-              gap: '8px',
+              gap:
+                '8px',
 
               alignItems:
                 'center'
@@ -1343,13 +1483,13 @@ export default function PayBillPage() {
               size={17}
             />
 
-            آپ کی ایک Online
-            Payment Verification
-            کے لیے Pending ہے۔
+            آپ کی ایک Online Payment Verification کے لیے Pending ہے۔
           </div>
         )}
 
-        {/* SUCCESS */}
+        {/* =================================================
+            SUCCESS
+        ================================================= */}
 
         {successMsg && (
           <div
@@ -1378,7 +1518,8 @@ export default function PayBillPage() {
               alignItems:
                 'center',
 
-              gap: '8px'
+              gap:
+                '8px'
             }}
           >
             <CheckCircle2
@@ -1389,7 +1530,9 @@ export default function PayBillPage() {
           </div>
         )}
 
-        {/* ERROR */}
+        {/* =================================================
+            ERROR
+        ================================================= */}
 
         {errorMsg && (
           <div
@@ -1418,7 +1561,8 @@ export default function PayBillPage() {
               alignItems:
                 'center',
 
-              gap: '8px'
+              gap:
+                '8px'
             }}
           >
             <AlertCircle
@@ -1456,12 +1600,14 @@ export default function PayBillPage() {
             flexDirection:
               'column',
 
-            gap: '14px'
+            gap:
+              '14px'
           }}
         >
           <h3
             style={{
-              margin: 0,
+              margin:
+                0,
 
               fontSize:
                 '13px',
@@ -1470,11 +1616,12 @@ export default function PayBillPage() {
                 '#38bdf8'
             }}
           >
-            ادائیگی کا طریقہ
-            منتخب کریں
+            ادائیگی کا طریقہ منتخب کریں
           </h3>
 
-          {/* PAYMENT METHODS */}
+          {/* =================================================
+              PAYMENT METHODS
+          ================================================= */}
 
           <div
             style={{
@@ -1484,7 +1631,8 @@ export default function PayBillPage() {
               gridTemplateColumns:
                 'repeat(auto-fit,minmax(115px,1fr))',
 
-              gap: '8px'
+              gap:
+                '8px'
             }}
           >
             <PaymentButton
@@ -1496,9 +1644,7 @@ export default function PayBillPage() {
               color="#10b981"
               icon={
                 <Smartphone
-                  size={
-                    19
-                  }
+                  size={19}
                 />
               }
               onClick={() =>
@@ -1517,9 +1663,7 @@ export default function PayBillPage() {
               color="#ef4444"
               icon={
                 <Smartphone
-                  size={
-                    19
-                  }
+                  size={19}
                 />
               }
               onClick={() =>
@@ -1538,9 +1682,7 @@ export default function PayBillPage() {
               color="#f59e0b"
               icon={
                 <QrCode
-                  size={
-                    19
-                  }
+                  size={19}
                 />
               }
               onClick={() =>
@@ -1559,9 +1701,7 @@ export default function PayBillPage() {
               color="#8b5cf6"
               icon={
                 <Wallet
-                  size={
-                    19
-                  }
+                  size={19}
                 />
               }
               onClick={() =>
@@ -1580,9 +1720,7 @@ export default function PayBillPage() {
               color="#3b82f6"
               icon={
                 <Wallet
-                  size={
-                    19
-                  }
+                  size={19}
                 />
               }
               onClick={() =>
@@ -1593,7 +1731,9 @@ export default function PayBillPage() {
             />
           </div>
 
-          {/* ACCOUNT DETAILS */}
+          {/* =================================================
+              ACCOUNT DETAILS
+          ================================================= */}
 
           <div
             style={{
@@ -1624,7 +1764,8 @@ export default function PayBillPage() {
                 alignItems:
                   'center',
 
-                gap: '10px'
+                gap:
+                  '10px'
               }}
             >
               <div>
@@ -1657,8 +1798,8 @@ export default function PayBillPage() {
                       '#94a3b8'
                   }}
                 >
-                  Account
-                  Title:{' '}
+                  Account Title:{' '}
+
                   <strong
                     style={{
                       color:
@@ -1725,7 +1866,9 @@ export default function PayBillPage() {
             </div>
           </div>
 
-          {/* AMOUNT */}
+          {/* =================================================
+              AMOUNT
+          ================================================= */}
 
           <div>
             <label
@@ -1733,8 +1876,7 @@ export default function PayBillPage() {
                 labelStyle
               }
             >
-              جمع کی جانے والی
-              رقم (Rs) *
+              جمع کی جانے والی رقم (Rs) *
             </label>
 
             <input
@@ -1747,10 +1889,11 @@ export default function PayBillPage() {
               value={
                 amountPaid
               }
-              onChange={e =>
-                setAmountPaid(
-                  e.target.value
-                )
+              onChange={
+                e =>
+                  setAmountPaid(
+                    e.target.value
+                  )
               }
               required
               disabled={
@@ -1764,7 +1907,9 @@ export default function PayBillPage() {
             />
           </div>
 
-          {/* TRANSACTION ID */}
+          {/* =================================================
+              TRANSACTION ID
+          ================================================= */}
 
           <div>
             <label
@@ -1772,8 +1917,7 @@ export default function PayBillPage() {
                 labelStyle
               }
             >
-              Transaction ID /
-              TRX ID
+              Transaction ID / TRX ID
             </label>
 
             <input
@@ -1782,23 +1926,27 @@ export default function PayBillPage() {
               value={
                 transactionId
               }
-              onChange={e =>
-                setTransactionId(
-                  e.target.value
-                )
+              onChange={
+                e =>
+                  setTransactionId(
+                    e.target.value
+                  )
               }
               disabled={
                 pendingPayment
               }
               style={{
                 ...inputStyle,
+
                 direction:
                   'ltr'
               }}
             />
           </div>
 
-          {/* RECEIPT */}
+          {/* =================================================
+              RECEIPT
+          ================================================= */}
 
           <div>
             <label
@@ -1855,7 +2003,8 @@ export default function PayBillPage() {
                 justifyContent:
                   'center',
 
-                gap: '6px',
+                gap:
+                  '6px',
 
                 cursor:
                   pendingPayment
@@ -1865,16 +2014,12 @@ export default function PayBillPage() {
             >
               {compressing ? (
                 <Loader2
-                  size={
-                    15
-                  }
+                  size={15}
                   className="animate-spin"
                 />
               ) : (
                 <Upload
-                  size={
-                    15
-                  }
+                  size={15}
                 />
               )}
 
@@ -1933,7 +2078,9 @@ export default function PayBillPage() {
             )}
           </div>
 
-          {/* SUBMIT */}
+          {/* =================================================
+              SUBMIT
+          ================================================= */}
 
           <button
             type="submit"
@@ -1984,7 +2131,8 @@ export default function PayBillPage() {
               justifyContent:
                 'center',
 
-              gap: '6px'
+              gap:
+                '6px'
             }}
           >
             {loading ? (
@@ -1998,8 +2146,7 @@ export default function PayBillPage() {
               />
             )}
 
-            {billingStats.totalDue <=
-            0
+            {billingStats.totalDue <= 0
               ? 'آپ کا کوئی بقایا نہیں'
               : pendingPayment
                 ? 'Verification Pending'
@@ -2028,6 +2175,8 @@ export default function PayBillPage() {
               '16px'
           }}
         >
+          {/* HISTORY HEADER */}
+
           <div
             style={{
               display:
@@ -2039,7 +2188,8 @@ export default function PayBillPage() {
               alignItems:
                 'center',
 
-              gap: '10px',
+              gap:
+                '10px',
 
               borderBottom:
                 '1px solid #334155',
@@ -2059,7 +2209,8 @@ export default function PayBillPage() {
                 alignItems:
                   'center',
 
-                gap: '7px'
+                gap:
+                  '7px'
               }}
             >
               <History
@@ -2070,7 +2221,8 @@ export default function PayBillPage() {
               <div>
                 <h3
                   style={{
-                    margin: 0,
+                    margin:
+                      0,
 
                     fontSize:
                       '14px',
@@ -2082,8 +2234,7 @@ export default function PayBillPage() {
                       '900'
                   }}
                 >
-                  مکمل ادائیگی
-                  ہسٹری
+                  مکمل ادائیگی ہسٹری
                 </h3>
 
                 <div
@@ -2098,8 +2249,7 @@ export default function PayBillPage() {
                       '#94a3b8'
                   }}
                 >
-                  Cash + Online
-                  Payments
+                  Cash + Online Payments + Reversed
                 </div>
               </div>
             </div>
@@ -2131,7 +2281,7 @@ export default function PayBillPage() {
                     '#94a3b8'
                 }}
               >
-                Paid History
+                Valid Paid
               </div>
 
               <div
@@ -2151,6 +2301,10 @@ export default function PayBillPage() {
               </div>
             </div>
           </div>
+
+          {/* =================================================
+              HISTORY LIST
+          ================================================= */}
 
           {paymentHistory.length ===
           0 ? (
@@ -2178,9 +2332,7 @@ export default function PayBillPage() {
                   '11px'
               }}
             >
-              ابھی تک کوئی
-              ادائیگی ریکارڈ
-              موجود نہیں۔
+              ابھی تک کوئی ادائیگی ریکارڈ موجود نہیں۔
             </div>
           ) : (
             <div
@@ -2191,7 +2343,8 @@ export default function PayBillPage() {
                 flexDirection:
                   'column',
 
-                gap: '10px'
+                gap:
+                  '10px'
               }}
             >
               {paymentHistory.map(
@@ -2239,6 +2392,11 @@ function HistoryCard({
       item.source
     );
 
+  const isReversed =
+    item.isReversed === true ||
+    normalized ===
+      'reversed';
+
   return (
     <div
       style={{
@@ -2246,16 +2404,25 @@ function HistoryCard({
           '#0f172a',
 
         border:
-          '1px solid #334155',
+          isReversed
+            ? '1px solid rgba(239,68,68,0.65)'
+            : '1px solid #334155',
 
         borderRadius:
           '12px',
 
         padding:
-          '12px'
+          '12px',
+
+        opacity:
+          isReversed
+            ? 0.9
+            : 1
       }}
     >
-      {/* TOP */}
+      {/* =====================================================
+          TOP
+      ===================================================== */}
 
       <div
         style={{
@@ -2268,7 +2435,8 @@ function HistoryCard({
           justifyContent:
             'space-between',
 
-          gap: '10px'
+          gap:
+            '10px'
         }}
       >
         <div
@@ -2279,7 +2447,8 @@ function HistoryCard({
             alignItems:
               'center',
 
-            gap: '8px'
+            gap:
+              '8px'
           }}
         >
           <div
@@ -2294,10 +2463,14 @@ function HistoryCard({
                 '10px',
 
               backgroundColor:
-                methodInfo.background,
+                isReversed
+                  ? 'rgba(239,68,68,0.12)'
+                  : methodInfo.background,
 
               color:
-                methodInfo.color,
+                isReversed
+                  ? '#f87171'
+                  : methodInfo.color,
 
               display:
                 'flex',
@@ -2309,8 +2482,12 @@ function HistoryCard({
                 'center'
             }}
           >
-            {item.source ===
-            'collection' ? (
+            {isReversed ? (
+              <RotateCcw
+                size={18}
+              />
+            ) : item.source ===
+              'collection' ? (
               <Banknote
                 size={18}
               />
@@ -2342,7 +2519,9 @@ function HistoryCard({
             <div
               style={{
                 color:
-                  '#64748b',
+                  isReversed
+                    ? '#f87171'
+                    : '#64748b',
 
                 fontSize:
                   '9px',
@@ -2351,13 +2530,17 @@ function HistoryCard({
                   '2px'
               }}
             >
-              {item.source ===
-              'collection'
-                ? 'Collection Payment'
-                : 'Online Payment'}
+              {isReversed
+                ? 'Payment Reversed'
+                : item.source ===
+                    'collection'
+                  ? 'Collection Payment'
+                  : 'Online Payment'}
             </div>
           </div>
         </div>
+
+        {/* AMOUNT + STATUS */}
 
         <div
           style={{
@@ -2368,13 +2551,20 @@ function HistoryCard({
           <div
             style={{
               color:
-                '#34d399',
+                isReversed
+                  ? '#f87171'
+                  : '#34d399',
 
               fontSize:
                 '15px',
 
               fontWeight:
-                '900'
+                '900',
+
+              textDecoration:
+                isReversed
+                  ? 'line-through'
+                  : 'none'
             }}
           >
             Rs{' '}
@@ -2417,7 +2607,9 @@ function HistoryCard({
         </div>
       </div>
 
-      {/* DETAILS */}
+      {/* =====================================================
+          DETAILS
+      ===================================================== */}
 
       <div
         style={{
@@ -2436,7 +2628,8 @@ function HistoryCard({
           gridTemplateColumns:
             'repeat(auto-fit,minmax(135px,1fr))',
 
-          gap: '8px'
+          gap:
+            '8px'
         }}
       >
         <HistoryDetail
@@ -2446,9 +2639,11 @@ function HistoryCard({
             />
           }
           title="تاریخ"
-          value={formatDate(
-            item.paymentDate
-          )}
+          value={
+            formatDate(
+              item.paymentDate
+            )
+          }
         />
 
         <HistoryDetail
@@ -2458,9 +2653,11 @@ function HistoryCard({
             />
           }
           title="وقت"
-          value={formatTime(
-            item.paymentDate
-          )}
+          value={
+            formatTime(
+              item.paymentDate
+            )
+          }
         />
 
         <HistoryDetail
@@ -2494,7 +2691,108 @@ function HistoryCard({
         />
       </div>
 
-      {/* RECEIPT */}
+      {/* =====================================================
+          REVERSAL INFORMATION
+      ===================================================== */}
+
+      {isReversed && (
+        <div
+          style={{
+            marginTop:
+              '11px',
+
+            backgroundColor:
+              'rgba(239,68,68,0.08)',
+
+            border:
+              '1px solid rgba(239,68,68,0.35)',
+
+            borderRadius:
+              '9px',
+
+            padding:
+              '10px'
+          }}
+        >
+          <div
+            style={{
+              display:
+                'flex',
+
+              alignItems:
+                'center',
+
+              gap:
+                '6px',
+
+              color:
+                '#f87171',
+
+              fontWeight:
+                '900',
+
+              fontSize:
+                '10px'
+            }}
+          >
+            <RotateCcw
+              size={13}
+            />
+
+            یہ Payment Reverse کر دی گئی ہے
+          </div>
+
+          {item.reversalReason && (
+            <div
+              style={{
+                marginTop:
+                  '7px',
+
+                fontSize:
+                  '9px',
+
+                color:
+                  '#fca5a5'
+              }}
+            >
+              <strong>
+                وجہ:
+              </strong>{' '}
+
+              {
+                item.reversalReason
+              }
+            </div>
+          )}
+
+          {item.reversedAt && (
+            <div
+              style={{
+                marginTop:
+                  '5px',
+
+                fontSize:
+                  '8px',
+
+                color:
+                  '#94a3b8'
+              }}
+            >
+              Reverse Date:{' '}
+
+              {
+                formatDateTime(
+                  item.reversedAt
+                )
+              }
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =====================================================
+          RECEIPT
+      ===================================================== */}
 
       {item.receiptUrl && (
         <div
@@ -2516,7 +2814,8 @@ function HistoryCard({
               alignItems:
                 'center',
 
-              gap: '5px',
+              gap:
+                '5px',
 
               color:
                 '#38bdf8',
@@ -2564,9 +2863,14 @@ function HistoryDetail({
   title,
   value
 }: {
-  icon: React.ReactNode;
-  title: string;
-  value: string;
+  icon:
+    React.ReactNode;
+
+  title:
+    string;
+
+  value:
+    string;
 }) {
   return (
     <div>
@@ -2578,7 +2882,8 @@ function HistoryDetail({
           alignItems:
             'center',
 
-          gap: '4px',
+          gap:
+            '4px',
 
           color:
             '#64748b',
@@ -2588,6 +2893,7 @@ function HistoryDetail({
         }}
       >
         {icon}
+
         {title}
       </div>
 
@@ -2624,9 +2930,14 @@ function BillCard({
   value,
   color
 }: {
-  title: string;
-  value: number;
-  color: string;
+  title:
+    string;
+
+  value:
+    number;
+
+  color:
+    string;
 }) {
   return (
     <div
@@ -2640,7 +2951,8 @@ function BillCard({
         borderRadius:
           '9px',
 
-        border: `1px solid ${color}`
+        border:
+          `1px solid ${color}`
       }}
     >
       <span
@@ -2670,6 +2982,7 @@ function BillCard({
         }}
       >
         Rs{' '}
+
         {value.toLocaleString()}
       </h4>
     </div>
@@ -2685,9 +2998,14 @@ function InfoBox({
   title,
   value
 }: {
-  icon: React.ReactNode;
-  title: string;
-  value: string;
+  icon:
+    React.ReactNode;
+
+  title:
+    string;
+
+  value:
+    string;
 }) {
   return (
     <div
@@ -2710,7 +3028,8 @@ function InfoBox({
           display:
             'flex',
 
-          gap: '5px',
+          gap:
+            '5px',
 
           alignItems:
             'center',
@@ -2723,6 +3042,7 @@ function InfoBox({
         }}
       >
         {icon}
+
         {title}
       </div>
 
@@ -2758,11 +3078,20 @@ function PaymentButton({
   icon,
   onClick
 }: {
-  active: boolean;
-  title: string;
-  color: string;
-  icon: React.ReactNode;
-  onClick: () => void;
+  active:
+    boolean;
+
+  title:
+    string;
+
+  color:
+    string;
+
+  icon:
+    React.ReactNode;
+
+  onClick:
+    () => void;
 }) {
   return (
     <button
@@ -2776,11 +3105,12 @@ function PaymentButton({
             ? `${color}22`
             : '#0f172a',
 
-        border: `1px solid ${
-          active
-            ? color
-            : '#334155'
-        }`,
+        border:
+          `1px solid ${
+            active
+              ? color
+              : '#334155'
+          }`,
 
         color:
           '#ffffff',
@@ -2803,7 +3133,8 @@ function PaymentButton({
         alignItems:
           'center',
 
-        gap: '5px',
+        gap:
+          '5px',
 
         fontSize:
           '10px',
@@ -2826,7 +3157,7 @@ function PaymentButton({
 }
 
 // ===========================================================
-// HELPERS
+// STATUS NORMALIZER
 // ===========================================================
 
 function normalizeStatus(
@@ -2835,7 +3166,24 @@ function normalizeStatus(
   const value =
     String(
       status || ''
-    ).toLowerCase();
+    )
+      .toLowerCase()
+      .trim();
+
+  // REVERSED
+
+  if (
+    value ===
+      'reversed' ||
+    value ===
+      'reverse' ||
+    value ===
+      'refunded'
+  ) {
+    return 'reversed';
+  }
+
+  // PAID
 
   if (
     value ===
@@ -2849,6 +3197,8 @@ function normalizeStatus(
   ) {
     return 'paid';
   }
+
+  // REJECTED
 
   if (
     value ===
@@ -2864,18 +3214,46 @@ function normalizeStatus(
   return 'pending';
 }
 
+// ===========================================================
+// STATUS STYLE
+// ===========================================================
+
 function getStatusInfo(
   status: string
 ) {
   if (
-    status === 'paid'
+    status ===
+    'reversed'
   ) {
     return {
-      label: 'PAID',
+      label:
+        'REVERSED',
+
+      color:
+        '#f87171',
+
+      background:
+        'rgba(239,68,68,0.12)',
+
+      border:
+        '#ef4444'
+    };
+  }
+
+  if (
+    status ===
+    'paid'
+  ) {
+    return {
+      label:
+        'PAID',
+
       color:
         '#34d399',
+
       background:
         'rgba(16,185,129,0.12)',
+
       border:
         '#10b981'
     };
@@ -2888,10 +3266,13 @@ function getStatusInfo(
     return {
       label:
         'REJECTED',
+
       color:
         '#f87171',
+
       background:
         'rgba(239,68,68,0.12)',
+
       border:
         '#ef4444'
     };
@@ -2900,18 +3281,28 @@ function getStatusInfo(
   return {
     label:
       'PENDING',
+
     color:
       '#fbbf24',
+
     background:
       'rgba(245,158,11,0.12)',
+
     border:
       '#f59e0b'
   };
 }
 
+// ===========================================================
+// PAYMENT METHOD INFO
+// ===========================================================
+
 function getMethodInfo(
   method: string,
-  source: 'collection' | 'online'
+
+  source:
+    | 'collection'
+    | 'online'
 ) {
   const value =
     String(
@@ -2923,6 +3314,8 @@ function getMethodInfo(
         ''
       );
 
+  // EASYPAISA
+
   if (
     value.includes(
       'easypaisa'
@@ -2931,12 +3324,16 @@ function getMethodInfo(
     return {
       label:
         'Easypaisa',
+
       color:
         '#34d399',
+
       background:
         'rgba(16,185,129,0.12)'
     };
   }
+
+  // JAZZCASH
 
   if (
     value.includes(
@@ -2946,12 +3343,16 @@ function getMethodInfo(
     return {
       label:
         'JazzCash',
+
       color:
         '#f87171',
+
       background:
         'rgba(239,68,68,0.12)'
     };
   }
+
+  // RAAST
 
   if (
     value.includes(
@@ -2964,12 +3365,16 @@ function getMethodInfo(
     return {
       label:
         'Raast',
+
       color:
         '#fbbf24',
+
       background:
         'rgba(245,158,11,0.12)'
     };
   }
+
+  // SADAPAY
 
   if (
     value.includes(
@@ -2979,12 +3384,16 @@ function getMethodInfo(
     return {
       label:
         'SadaPay',
+
       color:
         '#a78bfa',
+
       background:
         'rgba(139,92,246,0.12)'
     };
   }
+
+  // NAYAPAY
 
   if (
     value.includes(
@@ -2994,12 +3403,16 @@ function getMethodInfo(
     return {
       label:
         'NayaPay',
+
       color:
         '#60a5fa',
+
       background:
         'rgba(59,130,246,0.12)'
     };
   }
+
+  // BANK
 
   if (
     value.includes(
@@ -3009,44 +3422,78 @@ function getMethodInfo(
     return {
       label:
         'Bank Transfer',
+
       color:
         '#60a5fa',
+
       background:
         'rgba(59,130,246,0.12)'
     };
   }
 
+  // CASH
+
   if (
     value.includes(
       'cash'
-    ) ||
-    source ===
-      'collection'
+    )
   ) {
     return {
       label:
         'Cash',
+
       color:
         '#34d399',
+
       background:
         'rgba(16,185,129,0.12)'
     };
   }
 
+  // COLLECTION UNKNOWN METHOD
+
+  if (
+    source ===
+    'collection'
+  ) {
+    return {
+      label:
+        method ||
+        'Collection',
+
+      color:
+        '#34d399',
+
+      background:
+        'rgba(16,185,129,0.12)'
+    };
+  }
+
+  // ONLINE UNKNOWN
+
   return {
     label:
+      method ||
       'Online',
+
     color:
       '#38bdf8',
+
     background:
       'rgba(56,189,248,0.12)'
   };
 }
 
+// ===========================================================
+// DATE FORMAT
+// ===========================================================
+
 function formatDate(
   dateValue: string
 ) {
-  if (!dateValue) {
+  if (
+    !dateValue
+  ) {
     return '-';
   }
 
@@ -3068,25 +3515,28 @@ function formatDate(
     {
       day:
         '2-digit',
+
       month:
         'short',
+
       year:
         'numeric'
     }
   );
 }
 
+// ===========================================================
+// TIME FORMAT
+// ===========================================================
+
 function formatTime(
   dateValue: string
 ) {
-  if (!dateValue) {
+  if (
+    !dateValue
+  ) {
     return '-';
   }
-
-  /*
-    payment_date بعض اوقات صرف YYYY-MM-DD ہوتا ہے۔
-    ایسی صورت میں فرضی 5:00 AM وغیرہ دکھانے کے بجائے -- دکھائیں۔
-  */
 
   if (
     /^\d{4}-\d{2}-\d{2}$/.test(
@@ -3114,8 +3564,60 @@ function formatTime(
     {
       hour:
         '2-digit',
+
       minute:
         '2-digit',
+
+      hour12:
+        true
+    }
+  );
+}
+
+// ===========================================================
+// DATE + TIME
+// ===========================================================
+
+function formatDateTime(
+  dateValue: string
+) {
+  if (
+    !dateValue
+  ) {
+    return '-';
+  }
+
+  const date =
+    new Date(
+      dateValue
+    );
+
+  if (
+    isNaN(
+      date.getTime()
+    )
+  ) {
+    return dateValue;
+  }
+
+  return date.toLocaleString(
+    'en-PK',
+    {
+      day:
+        '2-digit',
+
+      month:
+        'short',
+
+      year:
+        'numeric',
+
+      hour:
+        '2-digit',
+
+      minute:
+        '2-digit',
+
       hour12:
         true
     }
@@ -3127,8 +3629,7 @@ function formatTime(
 // ===========================================================
 
 const labelStyle:
-  React.CSSProperties =
-  {
+  React.CSSProperties = {
     display:
       'block',
 
@@ -3146,8 +3647,7 @@ const labelStyle:
   };
 
 const inputStyle:
-  React.CSSProperties =
-  {
+  React.CSSProperties = {
     width:
       '100%',
 
