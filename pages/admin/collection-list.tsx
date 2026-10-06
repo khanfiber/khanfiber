@@ -34,6 +34,10 @@ interface CustomerStatusType {
   speed: string;
   monthly_price: number;
   connection_charges: number;
+
+  // Customer Portal Password
+  password: string;
+
   last_paid_amount: number;
   remaining_balance: number;
   is_paid: boolean;
@@ -45,29 +49,36 @@ interface TotalsType {
 }
 
 // ============================================================
+// CONSTANTS
+// ============================================================
+
+const PORTAL_URL = 'https://khanfiber.vercel.app';
+
+// ============================================================
 // MAIN PAGE
 // ============================================================
 
 export default function CollectionListPage() {
-  const [customers, setCustomers] = useState<CustomerStatusType[]>([]);
+  const [customers, setCustomers] =
+    useState<CustomerStatusType[]>([]);
 
   const [activeTab, setActiveTab] =
     useState<'paid' | 'pending'>('pending');
 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] =
+    useState('');
 
-  const [fetching, setFetching] = useState(true);
+  const [fetching, setFetching] =
+    useState(true);
 
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] =
+    useState('');
 
-  // ==========================================================
-  // ANALYTICS TOTALS
-  // ==========================================================
-
-  const [totals, setTotals] = useState<TotalsType>({
-    collectedAmount: 0,
-    pendingAmount: 0
-  });
+  const [totals, setTotals] =
+    useState<TotalsType>({
+      collectedAmount: 0,
+      pendingAmount: 0
+    });
 
   // ==========================================================
   // LOAD DATA FROM SUPABASE
@@ -79,7 +90,7 @@ export default function CollectionListPage() {
 
     try {
       // ------------------------------------------------------
-      // STEP 1: CUSTOMERS
+      // STEP 1: LOAD CUSTOMERS
       // ------------------------------------------------------
 
       const {
@@ -98,9 +109,12 @@ export default function CollectionListPage() {
           package_name,
           speed,
           monthly_price,
-          connection_charges
+          connection_charges,
+          password
         `)
-        .order('full_name', { ascending: true });
+        .order('full_name', {
+          ascending: true
+        });
 
       if (custError) {
         throw new Error(
@@ -109,7 +123,7 @@ export default function CollectionListPage() {
       }
 
       // ------------------------------------------------------
-      // STEP 2: COLLECTIONS
+      // STEP 2: LOAD COLLECTIONS
       // ------------------------------------------------------
 
       const {
@@ -127,7 +141,9 @@ export default function CollectionListPage() {
           remaining_balance,
           payment_date
         `)
-        .order('id', { ascending: false });
+        .order('id', {
+          ascending: false
+        });
 
       if (colError) {
         throw new Error(
@@ -140,119 +156,158 @@ export default function CollectionListPage() {
       // ------------------------------------------------------
 
       const formattedList: CustomerStatusType[] =
-        (custData || []).map((customer: any) => {
+        (custData || []).map(
+          (customer: any) => {
 
-          // اس customer کی collections
-          const customerCollections =
-            (colData || []).filter(
-              (collection: any) =>
-                Number(collection.customer_id) ===
-                Number(customer.id)
-            );
+            // اس کسٹمر کی تمام Collections
+            const customerCollections =
+              (colData || []).filter(
+                (collection: any) =>
+                  Number(
+                    collection.customer_id
+                  ) ===
+                  Number(customer.id)
+              );
 
-          // چونکہ collections ID descending میں ہیں،
-          // اس لیے پہلا record latest ہے
-          const latestCollection =
-            customerCollections.length > 0
-              ? customerCollections[0]
-              : null;
+            // Collections descending ہیں
+            // اس لیے پہلا record latest ہوگا
+            const latestCollection =
+              customerCollections.length > 0
+                ? customerCollections[0]
+                : null;
 
-          // --------------------------------------------------
-          // اگر ابھی کوئی collection نہیں ہوئی
-          // تو Connection Charges + Monthly Bill pending ہوگا
-          // --------------------------------------------------
+            // اگر collection ابھی موجود نہیں
+            // تو initial due:
+            // Connection Charges + Monthly Bill
+            const initialAmount =
+              Number(
+                customer.connection_charges || 0
+              ) +
+              Number(
+                customer.monthly_price || 0
+              );
 
-          const initialAmount =
-            Number(customer.connection_charges || 0) +
-            Number(customer.monthly_price || 0);
+            const remainingBalance =
+              latestCollection
+                ? Number(
+                    latestCollection
+                      .remaining_balance || 0
+                  )
+                : initialAmount;
 
-          const remainingBalance =
-            latestCollection
-              ? Number(
-                  latestCollection.remaining_balance || 0
-                )
-              : initialAmount;
+            const lastPaidAmount =
+              latestCollection
+                ? Number(
+                    latestCollection
+                      .paid_amount || 0
+                  )
+                : 0;
 
-          const lastPaidAmount =
-            latestCollection
-              ? Number(latestCollection.paid_amount || 0)
-              : 0;
+            const isPaid =
+              remainingBalance <= 0;
 
-          const isPaid =
-            remainingBalance <= 0;
+            return {
+              id: Number(customer.id),
 
-          return {
-            id: customer.id,
+              serial_number:
+                customer.serial_number ||
+                '---',
 
-            serial_number:
-              customer.serial_number || '---',
+              full_name:
+                customer.full_name ||
+                'نامعلوم',
 
-            full_name:
-              customer.full_name || 'نامعلوم',
+              father_name:
+                customer.father_name ||
+                '---',
 
-            father_name:
-              customer.father_name || '---',
+              pppoe_username:
+                customer.pppoe_username ||
+                '---',
 
-            pppoe_username:
-              customer.pppoe_username || '---',
+              phone:
+                customer.phone ||
+                '---',
 
-            phone:
-              customer.phone || '---',
+              whatsapp:
+                customer.whatsapp ||
+                customer.phone ||
+                '---',
 
-            whatsapp:
-              customer.whatsapp ||
-              customer.phone ||
-              '---',
+              package_name:
+                customer.package_name ||
+                '---',
 
-            package_name:
-              customer.package_name || '---',
+              speed:
+                customer.speed ||
+                '---',
 
-            speed:
-              customer.speed || '---',
+              monthly_price:
+                Number(
+                  customer.monthly_price || 0
+                ),
 
-            monthly_price:
-              Number(customer.monthly_price || 0),
+              connection_charges:
+                Number(
+                  customer.connection_charges ||
+                    0
+                ),
 
-            connection_charges:
-              Number(customer.connection_charges || 0),
+              // اگر پرانے customer کا password
+              // خالی ہے تو default 12345
+              password:
+                customer.password ||
+                '12345',
 
-            last_paid_amount:
-              lastPaidAmount,
+              last_paid_amount:
+                lastPaidAmount,
 
-            remaining_balance:
-              remainingBalance,
+              remaining_balance:
+                remainingBalance,
 
-            is_paid:
-              isPaid
-          };
-        });
+              is_paid:
+                isPaid
+            };
+          }
+        );
 
       // ======================================================
-      // CALCULATE ANALYTICS
+      // ANALYTICS
       // ======================================================
 
       let totalCollected = 0;
       let totalPending = 0;
 
-      // تمام collections میں وصول شدہ رقم
-      (colData || []).forEach((collection: any) => {
-        totalCollected +=
-          Number(collection.paid_amount || 0);
-      });
-
-      // تمام customers کا موجودہ pending balance
-      formattedList.forEach((customer) => {
-        if (customer.remaining_balance > 0) {
-          totalPending +=
-            customer.remaining_balance;
+      // تمام collection entries کی
+      // وصول شدہ رقم
+      (colData || []).forEach(
+        (collection: any) => {
+          totalCollected +=
+            Number(
+              collection.paid_amount || 0
+            );
         }
-      });
+      );
+
+      // موجودہ pending balances
+      formattedList.forEach(
+        (customer) => {
+          if (
+            customer.remaining_balance > 0
+          ) {
+            totalPending +=
+              customer.remaining_balance;
+          }
+        }
+      );
 
       setCustomers(formattedList);
 
       setTotals({
-        collectedAmount: totalCollected,
-        pendingAmount: totalPending
+        collectedAmount:
+          totalCollected,
+        pendingAmount:
+          totalPending
       });
 
     } catch (err: any) {
@@ -283,16 +338,19 @@ export default function CollectionListPage() {
   // COUNTERS
   // ==========================================================
 
-  const totalUsers = customers.length;
+  const totalUsers =
+    customers.length;
 
   const paidCount =
     customers.filter(
-      (customer) => customer.is_paid
+      (customer) =>
+        customer.is_paid
     ).length;
 
   const pendingCount =
     customers.filter(
-      (customer) => !customer.is_paid
+      (customer) =>
+        !customer.is_paid
     ).length;
 
   // ==========================================================
@@ -300,39 +358,51 @@ export default function CollectionListPage() {
   // ==========================================================
 
   const filteredCustomers =
-    customers.filter((customer) => {
+    customers.filter(
+      (customer) => {
 
-      const matchesTab =
-        activeTab === 'paid'
-          ? customer.is_paid
-          : !customer.is_paid;
+        const matchesTab =
+          activeTab === 'paid'
+            ? customer.is_paid
+            : !customer.is_paid;
 
-      const search =
-        searchTerm.toLowerCase().trim();
+        const search =
+          searchTerm
+            .toLowerCase()
+            .trim();
 
-      const matchesSearch =
-        search === '' ||
-        customer.full_name
-          .toLowerCase()
-          .includes(search) ||
-        customer.father_name
-          .toLowerCase()
-          .includes(search) ||
-        customer.pppoe_username
-          .toLowerCase()
-          .includes(search) ||
-        customer.serial_number
-          .toLowerCase()
-          .includes(search) ||
-        customer.phone
-          .toLowerCase()
-          .includes(search);
+        const matchesSearch =
+          search === '' ||
 
-      return matchesTab && matchesSearch;
-    });
+          customer.full_name
+            .toLowerCase()
+            .includes(search) ||
+
+          customer.father_name
+            .toLowerCase()
+            .includes(search) ||
+
+          customer.pppoe_username
+            .toLowerCase()
+            .includes(search) ||
+
+          customer.serial_number
+            .toLowerCase()
+            .includes(search) ||
+
+          customer.phone
+            .toLowerCase()
+            .includes(search);
+
+        return (
+          matchesTab &&
+          matchesSearch
+        );
+      }
+    );
 
   // ==========================================================
-  // WHATSAPP REMINDER
+  // WHATSAPP PAYMENT REMINDER
   // ==========================================================
 
   const handleSendReminder = (
@@ -340,8 +410,10 @@ export default function CollectionListPage() {
   ) => {
 
     const targetPhone =
-      customer.whatsapp ||
-      customer.phone;
+      customer.whatsapp &&
+      customer.whatsapp !== '---'
+        ? customer.whatsapp
+        : customer.phone;
 
     if (
       !targetPhone ||
@@ -350,48 +422,123 @@ export default function CollectionListPage() {
       alert(
         'اس صارف کا WhatsApp یا فون نمبر موجود نہیں ہے!'
       );
+
       return;
     }
 
     const currentDate =
-      new Date().toLocaleDateString('en-GB');
+      new Date().toLocaleDateString(
+        'en-GB'
+      );
+
+    // --------------------------------------------------------
+    // CUSTOMER PORTAL LOGIN
+    // --------------------------------------------------------
+
+    const portalUsername =
+      customer.serial_number;
+
+    const portalPassword =
+      customer.password || '12345';
+
+    // --------------------------------------------------------
+    // MESSAGE
+    // --------------------------------------------------------
 
     const reminderMessage =
-      `🌐 *ONE CLICK | HAIDER FIBER NETWORK*\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `🔔 *بل یاددہانی / PAYMENT REMINDER*\n\n` +
+`🌐 *ONE CLICK | HAIDER FIBER NETWORK*
+━━━━━━━━━━━━━━━━━━
+🔔 *بل یاددہانی / PAYMENT REMINDER*
 
-      `محترم *${customer.full_name}*!\n\n` +
+محترم *${customer.full_name}*!
 
-      `آپ کے انٹرنیٹ اکاؤنٹ پر بل واجب الادا ہے۔\n\n` +
+آپ کے انٹرنیٹ اکاؤنٹ پر بل واجب الادا ہے۔
 
-      `👤 *صارف کی تفصیلات*\n` +
-      `▫️ Customer ID: ${customer.serial_number}\n` +
-      `▫️ PPPoE User: ${customer.pppoe_username}\n` +
-      `▫️ Package: ${customer.package_name}\n` +
-      `▫️ Speed: ${customer.speed}\n\n` +
+━━━━━━━━━━━━━━━━━━
+👤 *صارف کی تفصیلات*
+━━━━━━━━━━━━━━━━━━
 
-      `💰 *بل کی تفصیلات*\n` +
-      `▫️ ماہانہ بل: Rs ${customer.monthly_price.toLocaleString()}\n` +
-      `🔻 *کل بقایا رقم: Rs ${customer.remaining_balance.toLocaleString()}*\n\n` +
+🆔 *Customer ID:* ${customer.serial_number}
+🔐 *PPPoE User:* ${customer.pppoe_username}
+📦 *Package:* ${customer.package_name}
+⚡ *Speed:* ${customer.speed}
 
-      `⚠️ *براہِ مہربانی اپنا واجب الادا بل جلد از جلد جمع کروائیں۔*\n\n` +
+━━━━━━━━━━━━━━━━━━
+💰 *بل کی تفصیلات*
+━━━━━━━━━━━━━━━━━━
 
-      `وقت پر بل جمع نہ کروانے کی صورت میں انٹرنیٹ سروس عارضی طور پر معطل کی جا سکتی ہے۔\n\n` +
+💵 *ماہانہ بل:* Rs ${customer.monthly_price.toLocaleString()}
 
-      `اگر آپ بل پہلے ہی جمع کروا چکے ہیں تو براہِ مہربانی اپنی رسید شیئر کر دیں۔\n\n` +
+🔴 *کل واجب الادا رقم:*
+*Rs ${customer.remaining_balance.toLocaleString()}*
 
-      `📅 تاریخ: ${currentDate}\n\n` +
+⚠️ براہِ مہربانی اپنا واجب الادا بل جلد از جلد جمع کروائیں۔
 
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `شکریہ!\n` +
-      `*Haider Fiber Network Team*\n` +
-      `Powered by *One Click*`;
+وقت پر بل جمع نہ کروانے کی صورت میں انٹرنیٹ سروس عارضی طور پر معطل کی جا سکتی ہے۔
 
-    openWhatsAppDirect(
-      targetPhone,
-      reminderMessage
-    );
+اگر آپ بل پہلے ہی جمع کروا چکے ہیں تو اپنی ادائیگی کی رسید/Transaction ID محفوظ رکھیں۔
+
+━━━━━━━━━━━━━━━━━━
+📱 *CUSTOMER PORTAL / APP*
+━━━━━━━━━━━━━━━━━━
+
+اپنے کنکشن کی معلومات، موجودہ بل، بقایا رقم، بل کی ادائیگی اور شکایات کے لیے ہمارا Customer Portal استعمال کریں۔
+
+🌐 *Portal Address:*
+${PORTAL_URL}
+
+🔑 *Portal Login Details*
+
+👤 *User / Customer ID:*
+${portalUsername}
+
+🔒 *Password:*
+${portalPassword}
+
+اوپر دیے گئے User اور Password کے ذریعے Portal میں Login کریں۔
+
+📲 *اپنے موبائل میں ہماری App انسٹال کریں*
+
+Portal کھول کر اسے اپنے موبائل کی Home Screen پر Install/Add کریں۔
+
+اس App/Portal سے آپ:
+
+✅ اپنے کنکشن کی معلومات دیکھ سکتے ہیں
+✅ اپنا پیکیج اور انٹرنیٹ سپیڈ دیکھ سکتے ہیں
+✅ موجودہ بل اور بقایا رقم چیک کر سکتے ہیں
+✅ Online Bill Payment کر سکتے ہیں
+✅ Payment Status چیک کر سکتے ہیں
+✅ اپنی شکایت درج کر سکتے ہیں
+✅ اپنے اکاؤنٹ کی معلومات دیکھ سکتے ہیں
+
+📅 *Reminder Date:* ${currentDate}
+
+━━━━━━━━━━━━━━━━━━
+
+شکریہ ❤️
+
+*ONE CLICK*
+*Haider Fiber Network (SMC-Private) Limited*
+*Your Network Solution*`;
+
+    try {
+
+      openWhatsAppDirect(
+        targetPhone,
+        reminderMessage
+      );
+
+    } catch (error) {
+
+      console.error(
+        'WhatsApp Error:',
+        error
+      );
+
+      alert(
+        'WhatsApp کھولنے میں خرابی پیش آئی۔'
+      );
+    }
   };
 
   // ==========================================================
@@ -418,12 +565,18 @@ export default function CollectionListPage() {
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent:
+              'space-between',
+
             background:
               'linear-gradient(135deg,#10253e,#0b1e33)',
+
             padding: '14px',
+
             borderRadius: '16px',
-            border: '1px solid #3b82f6'
+
+            border:
+              '1px solid #3b82f6'
           }}
         >
 
@@ -439,12 +592,17 @@ export default function CollectionListPage() {
               style={{
                 backgroundColor:
                   'rgba(139,92,246,0.18)',
+
                 padding: '9px',
+
                 borderRadius: '10px',
+
                 color: '#a78bfa'
               }}
             >
+
               <FileText size={20} />
+
             </div>
 
             <div>
@@ -452,8 +610,11 @@ export default function CollectionListPage() {
               <h2
                 style={{
                   margin: 0,
+
                   fontSize: '16px',
+
                   fontWeight: '900',
+
                   color: '#ffffff'
                 }}
               >
@@ -463,7 +624,9 @@ export default function CollectionListPage() {
               <p
                 style={{
                   margin: '3px 0 0',
+
                   fontSize: '10px',
+
                   color: '#94a3b8'
                 }}
               >
@@ -486,14 +649,22 @@ export default function CollectionListPage() {
             style={{
               backgroundColor:
                 'rgba(239,68,68,0.15)',
+
               border:
                 '1px solid #ef4444',
+
               color: '#f87171',
+
               padding: '12px',
+
               borderRadius: '12px',
+
               fontSize: '12px',
+
               display: 'flex',
+
               alignItems: 'center',
+
               gap: '8px'
             }}
           >
@@ -513,38 +684,41 @@ export default function CollectionListPage() {
         <div
           style={{
             display: 'grid',
+
             gridTemplateColumns:
               'repeat(auto-fit,minmax(145px,1fr))',
+
             gap: '10px',
+
             width: '100%'
           }}
         >
-
-          {/* TOTAL USERS */}
 
           <AnalyticsCard
             title="کل صارفین"
             value={`${totalUsers} یوزرز`}
             color="#60a5fa"
-            icon={<Users size={18} />}
+            icon={
+              <Users size={18} />
+            }
           />
-
-          {/* COLLECTED */}
 
           <AnalyticsCard
             title={`کل وصول شدہ (${paidCount} مکمل ادا)`}
             value={`Rs ${totals.collectedAmount.toLocaleString()}`}
             color="#34d399"
-            icon={<TrendingUp size={18} />}
+            icon={
+              <TrendingUp size={18} />
+            }
           />
-
-          {/* PENDING */}
 
           <AnalyticsCard
             title={`کل پینڈنگ (${pendingCount} یوزرز)`}
             value={`Rs ${totals.pendingAmount.toLocaleString()}`}
             color="#f87171"
-            icon={<CreditCard size={18} />}
+            icon={
+              <CreditCard size={18} />
+            }
           />
 
         </div>
@@ -557,11 +731,18 @@ export default function CollectionListPage() {
           style={{
             background:
               'linear-gradient(180deg,#10233c,#0d1d32)',
+
             borderRadius: '14px',
+
             padding: '12px',
-            border: '1px solid #334155',
+
+            border:
+              '1px solid #334155',
+
             display: 'flex',
+
             flexDirection: 'column',
+
             gap: '10px'
           }}
         >
@@ -571,23 +752,36 @@ export default function CollectionListPage() {
           <div
             style={{
               backgroundColor: '#071829',
+
               padding: '4px',
+
               borderRadius: '10px',
-              border: '1px solid #334155',
+
+              border:
+                '1px solid #334155',
+
               display: 'flex',
+
               gap: '6px'
             }}
           >
 
+            {/* PENDING */}
+
             <button
               type="button"
+
               onClick={() =>
                 setActiveTab('pending')
               }
+
               style={{
                 flex: 1,
+
                 padding: '9px',
+
                 borderRadius: '8px',
+
                 border: 'none',
 
                 background:
@@ -601,12 +795,18 @@ export default function CollectionListPage() {
                     : '#94a3b8',
 
                 fontWeight: 'bold',
+
                 fontSize: '11px',
+
                 cursor: 'pointer',
 
                 display: 'flex',
+
                 alignItems: 'center',
-                justifyContent: 'center',
+
+                justifyContent:
+                  'center',
+
                 gap: '5px'
               }}
             >
@@ -617,15 +817,22 @@ export default function CollectionListPage() {
 
             </button>
 
+            {/* PAID */}
+
             <button
               type="button"
+
               onClick={() =>
                 setActiveTab('paid')
               }
+
               style={{
                 flex: 1,
+
                 padding: '9px',
+
                 borderRadius: '8px',
+
                 border: 'none',
 
                 background:
@@ -639,12 +846,18 @@ export default function CollectionListPage() {
                     : '#94a3b8',
 
                 fontWeight: 'bold',
+
                 fontSize: '11px',
+
                 cursor: 'pointer',
 
                 display: 'flex',
+
                 alignItems: 'center',
-                justifyContent: 'center',
+
+                justifyContent:
+                  'center',
+
                 gap: '5px'
               }}
             >
@@ -662,7 +875,9 @@ export default function CollectionListPage() {
           <div
             style={{
               display: 'flex',
+
               gap: '8px',
+
               alignItems: 'center'
             }}
           >
@@ -670,68 +885,108 @@ export default function CollectionListPage() {
             <div
               style={{
                 position: 'relative',
+
                 flex: 1
               }}
             >
 
               <input
                 type="text"
+
                 placeholder="نام، HFN ID، PPPoE یا فون..."
+
                 value={searchTerm}
+
                 onChange={(e) =>
-                  setSearchTerm(e.target.value)
+                  setSearchTerm(
+                    e.target.value
+                  )
                 }
+
                 style={{
                   width: '100%',
-                  boxSizing: 'border-box',
-                  backgroundColor: '#071829',
+
+                  boxSizing:
+                    'border-box',
+
+                  backgroundColor:
+                    '#071829',
+
                   border:
                     '1px solid #3b82f6',
+
                   color: '#ffffff',
+
                   padding:
                     '10px 38px 10px 10px',
+
                   borderRadius: '9px',
+
                   fontSize: '12px',
+
                   outline: 'none'
                 }}
               />
 
               <Search
                 size={15}
+
                 style={{
-                  position: 'absolute',
+                  position:
+                    'absolute',
+
                   right: '11px',
+
                   top: '11px',
+
                   color: '#38bdf8'
                 }}
               />
 
             </div>
 
+            {/* REFRESH */}
+
             <button
               type="button"
+
               onClick={fetchData}
+
               disabled={fetching}
+
               style={{
-                backgroundColor: '#071829',
+                backgroundColor:
+                  '#071829',
+
                 color: '#38bdf8',
+
                 border:
                   '1px solid #334155',
+
                 padding: '9px 11px',
+
                 borderRadius: '9px',
-                cursor: 'pointer',
+
+                cursor:
+                  fetching
+                    ? 'not-allowed'
+                    : 'pointer',
 
                 display: 'flex',
+
                 alignItems: 'center',
+
                 gap: '4px',
 
                 fontSize: '11px',
+
                 fontWeight: 'bold'
               }}
             >
 
               <RefreshCw
                 size={15}
+
                 className={
                   fetching
                     ? 'animate-spin'
@@ -739,11 +994,7 @@ export default function CollectionListPage() {
                 }
               />
 
-              <span
-                className="refreshText"
-              >
-                ریفریش
-              </span>
+              ریفریش
 
             </button>
 
@@ -752,18 +1003,25 @@ export default function CollectionListPage() {
         </div>
 
         {/* ====================================================
-            LIST / TABLE
+            TABLE
         ==================================================== */}
 
         <div
           style={{
             background:
               'linear-gradient(180deg,#10233c,#0d1d32)',
+
             borderRadius: '14px',
+
             padding: '10px',
-            border: '1px solid #334155',
+
+            border:
+              '1px solid #334155',
+
             overflowX: 'auto',
-            WebkitOverflowScrolling: 'touch'
+
+            WebkitOverflowScrolling:
+              'touch'
           }}
         >
 
@@ -772,15 +1030,20 @@ export default function CollectionListPage() {
             <div
               style={{
                 padding: '30px',
+
                 textAlign: 'center',
+
                 color: '#38bdf8',
+
                 fontSize: '12px'
               }}
             >
 
               <RefreshCw
                 size={20}
+
                 className="animate-spin"
+
                 style={{
                   marginBottom: '8px'
                 }}
@@ -796,9 +1059,13 @@ export default function CollectionListPage() {
 
             <div
               style={{
-                padding: '30px 10px',
+                padding:
+                  '30px 10px',
+
                 textAlign: 'center',
+
                 color: '#64748b',
+
                 fontSize: '12px'
               }}
             >
@@ -810,9 +1077,14 @@ export default function CollectionListPage() {
             <table
               style={{
                 width: '100%',
+
                 minWidth: '950px',
-                borderCollapse: 'collapse',
+
+                borderCollapse:
+                  'collapse',
+
                 textAlign: 'right',
+
                 fontSize: '11px'
               }}
             >
@@ -821,9 +1093,12 @@ export default function CollectionListPage() {
 
                 <tr
                   style={{
-                    backgroundColor: '#071829',
+                    backgroundColor:
+                      '#071829',
+
                     borderBottom:
                       '1px solid #334155',
+
                     color: '#94a3b8'
                   }}
                 >
@@ -863,7 +1138,9 @@ export default function CollectionListPage() {
                   <th
                     style={{
                       ...thStyle,
-                      textAlign: 'center'
+
+                      textAlign:
+                        'center'
                     }}
                   >
                     سٹیٹس / ایکشن
@@ -880,34 +1157,47 @@ export default function CollectionListPage() {
 
                     <tr
                       key={user.id}
+
                       style={{
                         borderBottom:
                           '1px solid #1e293b'
                       }}
                     >
 
+                      {/* NUMBER */}
+
                       <td style={tdStyle}>
+
                         <span
                           style={{
-                            color: '#64748b'
+                            color:
+                              '#64748b'
                           }}
                         >
                           {index + 1}
                         </span>
+
                       </td>
 
-                      {/* HFN ID */}
+                      {/* CUSTOMER ID */}
 
                       <td style={tdStyle}>
+
                         <span
                           style={{
-                            color: '#22d3ee',
-                            fontWeight: 'bold',
-                            direction: 'ltr'
+                            color:
+                              '#22d3ee',
+
+                            fontWeight:
+                              'bold',
+
+                            direction:
+                              'ltr'
                           }}
                         >
                           {user.serial_number}
                         </span>
+
                       </td>
 
                       {/* CUSTOMER */}
@@ -917,7 +1207,10 @@ export default function CollectionListPage() {
                         <div
                           style={{
                             display: 'flex',
-                            alignItems: 'center',
+
+                            alignItems:
+                              'center',
+
                             gap: '7px'
                           }}
                         >
@@ -926,20 +1219,32 @@ export default function CollectionListPage() {
                             style={{
                               backgroundColor:
                                 'rgba(59,130,246,0.15)',
+
                               padding: '5px',
-                              borderRadius: '6px',
-                              color: '#60a5fa'
+
+                              borderRadius:
+                                '6px',
+
+                              color:
+                                '#60a5fa'
                             }}
                           >
-                            <User size={13} />
+
+                            <User
+                              size={13}
+                            />
+
                           </div>
 
                           <div>
 
                             <div
                               style={{
-                                fontWeight: 'bold',
-                                color: '#ffffff'
+                                fontWeight:
+                                  'bold',
+
+                                color:
+                                  '#ffffff'
                               }}
                             >
                               {user.full_name}
@@ -947,16 +1252,31 @@ export default function CollectionListPage() {
 
                             <div
                               style={{
-                                marginTop: '2px',
-                                color: '#64748b',
-                                fontSize: '9px',
-                                display: 'flex',
-                                alignItems: 'center',
+                                marginTop:
+                                  '2px',
+
+                                color:
+                                  '#64748b',
+
+                                fontSize:
+                                  '9px',
+
+                                display:
+                                  'flex',
+
+                                alignItems:
+                                  'center',
+
                                 gap: '3px'
                               }}
                             >
-                              <Phone size={9} />
+
+                              <Phone
+                                size={9}
+                              />
+
                               {user.phone}
+
                             </div>
 
                           </div>
@@ -970,9 +1290,15 @@ export default function CollectionListPage() {
                       <td
                         style={{
                           ...tdStyle,
-                          color: '#38bdf8',
-                          direction: 'ltr',
-                          fontWeight: 'bold'
+
+                          color:
+                            '#38bdf8',
+
+                          direction:
+                            'ltr',
+
+                          fontWeight:
+                            'bold'
                         }}
                       >
                         {user.pppoe_username}
@@ -984,8 +1310,11 @@ export default function CollectionListPage() {
 
                         <div
                           style={{
-                            color: '#c4b5fd',
-                            fontWeight: 'bold'
+                            color:
+                              '#c4b5fd',
+
+                            fontWeight:
+                              'bold'
                           }}
                         >
                           {user.package_name}
@@ -993,27 +1322,46 @@ export default function CollectionListPage() {
 
                         <div
                           style={{
-                            color: '#34d399',
-                            fontSize: '9px',
-                            marginTop: '2px',
-                            display: 'flex',
-                            alignItems: 'center',
+                            color:
+                              '#34d399',
+
+                            fontSize:
+                              '9px',
+
+                            marginTop:
+                              '2px',
+
+                            display:
+                              'flex',
+
+                            alignItems:
+                              'center',
+
                             gap: '3px'
                           }}
                         >
-                          <Wifi size={9} />
+
+                          <Wifi
+                            size={9}
+                          />
+
                           {user.speed}
+
                         </div>
 
                       </td>
 
-                      {/* MONTHLY */}
+                      {/* MONTHLY BILL */}
 
                       <td
                         style={{
                           ...tdStyle,
-                          color: '#38bdf8',
-                          fontWeight: 'bold'
+
+                          color:
+                            '#38bdf8',
+
+                          fontWeight:
+                            'bold'
                         }}
                       >
                         Rs{' '}
@@ -1025,8 +1373,12 @@ export default function CollectionListPage() {
                       <td
                         style={{
                           ...tdStyle,
-                          color: '#34d399',
-                          fontWeight: 'bold'
+
+                          color:
+                            '#34d399',
+
+                          fontWeight:
+                            'bold'
                         }}
                       >
                         Rs{' '}
@@ -1038,23 +1390,29 @@ export default function CollectionListPage() {
                       <td
                         style={{
                           ...tdStyle,
+
                           color:
-                            user.remaining_balance > 0
+                            user.remaining_balance >
+                            0
                               ? '#f87171'
                               : '#34d399',
-                          fontWeight: '900'
+
+                          fontWeight:
+                            '900'
                         }}
                       >
                         Rs{' '}
                         {user.remaining_balance.toLocaleString()}
                       </td>
 
-                      {/* STATUS */}
+                      {/* STATUS / ACTION */}
 
                       <td
                         style={{
                           ...tdStyle,
-                          textAlign: 'center'
+
+                          textAlign:
+                            'center'
                         }}
                       >
 
@@ -1064,16 +1422,32 @@ export default function CollectionListPage() {
                             style={{
                               backgroundColor:
                                 'rgba(16,185,129,0.15)',
-                              color: '#34d399',
+
+                              color:
+                                '#34d399',
+
                               border:
                                 '1px solid rgba(16,185,129,0.4)',
-                              padding: '5px 9px',
-                              borderRadius: '10px',
-                              fontSize: '10px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
+
+                              padding:
+                                '5px 9px',
+
+                              borderRadius:
+                                '10px',
+
+                              fontSize:
+                                '10px',
+
+                              display:
+                                'inline-flex',
+
+                              alignItems:
+                                'center',
+
                               gap: '4px',
-                              whiteSpace: 'nowrap'
+
+                              whiteSpace:
+                                'nowrap'
                             }}
                           >
 
@@ -1089,60 +1463,107 @@ export default function CollectionListPage() {
 
                           <div
                             style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
+                              display:
+                                'inline-flex',
+
+                              alignItems:
+                                'center',
+
                               gap: '6px'
                             }}
                           >
+
+                            {/* PENDING */}
 
                             <span
                               style={{
                                 backgroundColor:
                                   'rgba(239,68,68,0.15)',
-                                color: '#f87171',
+
+                                color:
+                                  '#f87171',
+
                                 border:
                                   '1px solid rgba(239,68,68,0.4)',
-                                padding: '5px 8px',
-                                borderRadius: '9px',
-                                fontSize: '10px',
-                                display: 'inline-flex',
-                                alignItems: 'center',
+
+                                padding:
+                                  '5px 8px',
+
+                                borderRadius:
+                                  '9px',
+
+                                fontSize:
+                                  '10px',
+
+                                display:
+                                  'inline-flex',
+
+                                alignItems:
+                                  'center',
+
                                 gap: '3px',
-                                whiteSpace: 'nowrap'
+
+                                whiteSpace:
+                                  'nowrap'
                               }}
                             >
 
-                              <Clock size={11} />
+                              <Clock
+                                size={11}
+                              />
 
                               پینڈنگ
 
                             </span>
 
-                            {/* WHATSAPP BUTTON */}
+                            {/* WHATSAPP */}
 
                             <button
                               type="button"
+
                               onClick={() =>
                                 handleSendReminder(
                                   user
                                 )
                               }
+
                               title="WhatsApp پر بل Reminder بھیجیں"
+
                               style={{
                                 background:
                                   'linear-gradient(135deg,#10b981,#059669)',
-                                color: '#ffffff',
-                                border: 'none',
-                                padding: '6px 9px',
-                                borderRadius: '7px',
-                                fontSize: '10px',
-                                fontWeight: 'bold',
-                                cursor: 'pointer',
+
+                                color:
+                                  '#ffffff',
+
+                                border:
+                                  'none',
+
+                                padding:
+                                  '6px 9px',
+
+                                borderRadius:
+                                  '7px',
+
+                                fontSize:
+                                  '10px',
+
+                                fontWeight:
+                                  'bold',
+
+                                cursor:
+                                  'pointer',
+
                                 display:
                                   'inline-flex',
-                                alignItems: 'center',
+
+                                alignItems:
+                                  'center',
+
                                 gap: '4px',
-                                whiteSpace: 'nowrap'
+
+                                whiteSpace:
+                                  'nowrap'
                               }}
                             >
 
@@ -1180,7 +1601,7 @@ export default function CollectionListPage() {
 }
 
 // ============================================================
-// ANALYTICS CARD COMPONENT
+// ANALYTICS CARD
 // ============================================================
 
 function AnalyticsCard({
@@ -1201,15 +1622,27 @@ function AnalyticsCard({
       style={{
         background:
           'linear-gradient(135deg,#17233f,#1c2541)',
-        border: `1px solid ${color}`,
-        borderRadius: '12px',
-        padding: '11px 12px',
 
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        border:
+          `1px solid ${color}`,
 
-        minHeight: '62px'
+        borderRadius:
+          '12px',
+
+        padding:
+          '11px 12px',
+
+        display:
+          'flex',
+
+        justifyContent:
+          'space-between',
+
+        alignItems:
+          'center',
+
+        minHeight:
+          '62px'
       }}
     >
 
@@ -1218,9 +1651,14 @@ function AnalyticsCard({
         <p
           style={{
             margin: 0,
-            fontSize: '10px',
+
+            fontSize:
+              '10px',
+
             color,
-            fontWeight: 'bold'
+
+            fontWeight:
+              'bold'
           }}
         >
           {title}
@@ -1228,10 +1666,17 @@ function AnalyticsCard({
 
         <h3
           style={{
-            margin: '4px 0 0',
-            fontSize: '16px',
-            fontWeight: '900',
-            color: '#ffffff'
+            margin:
+              '4px 0 0',
+
+            fontSize:
+              '16px',
+
+            fontWeight:
+              '900',
+
+            color:
+              '#ffffff'
           }}
         >
           {value}
@@ -1243,8 +1688,13 @@ function AnalyticsCard({
         style={{
           backgroundColor:
             'rgba(255,255,255,0.06)',
-          padding: '8px',
-          borderRadius: '8px',
+
+          padding:
+            '8px',
+
+          borderRadius:
+            '8px',
+
           color
         }}
       >
