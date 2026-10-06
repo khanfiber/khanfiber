@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
 import { supabase } from '../../lib/supabaseClient';
 import {
@@ -8,14 +8,24 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Building,
   Smartphone,
   QrCode,
   User,
   Wifi,
   Receipt,
-  Clock
+  Clock,
+  Wallet,
+  History,
+  Banknote,
+  CalendarDays,
+  Hash,
+  CircleDollarSign,
+  RefreshCw
 } from 'lucide-react';
+
+// ===========================================================
+// TYPES
+// ===========================================================
 
 interface CustomerType {
   id: number;
@@ -41,7 +51,23 @@ type PaymentMethod =
   | 'easypaisa'
   | 'jazzcash'
   | 'raast'
-  | 'bank';
+  | 'sadapay'
+  | 'nayapay';
+
+interface PaymentHistoryItem {
+  uniqueId: string;
+  source: 'collection' | 'online';
+  amount: number;
+  paymentMethod: string;
+  transactionId: string;
+  status: string;
+  paymentDate: string;
+  receiptUrl?: string | null;
+}
+
+// ===========================================================
+// PAGE
+// ===========================================================
 
 export default function PayBillPage() {
   const [customer, setCustomer] =
@@ -54,6 +80,9 @@ export default function PayBillPage() {
       totalDue: 0,
       totalPaid: 0
     });
+
+  const [paymentHistory, setPaymentHistory] =
+    useState<PaymentHistoryItem[]>([]);
 
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>('easypaisa');
@@ -89,7 +118,7 @@ export default function PayBillPage() {
     useState(false);
 
   // =========================================================
-  // PAYMENT METHOD DETAILS
+  // PAYMENT DETAILS
   // =========================================================
 
   const paymentDetails: Record<
@@ -103,35 +132,47 @@ export default function PayBillPage() {
   > = {
     easypaisa: {
       title: 'Easypaisa',
-      accountTitle: 'Haider Fiber Network',
-      accountNumber: '0300-1234567',
-      note: 'Easypaisa سے رقم بھیجنے کے بعد Transaction ID درج کریں۔'
+      accountTitle: 'Asmatullah',
+      accountNumber: '03457361106',
+      note:
+        'Easypaisa پر رقم بھیجنے کے بعد Transaction ID درج کریں یا رسید اپ لوڈ کریں۔'
     },
 
     jazzcash: {
       title: 'JazzCash',
-      accountTitle: 'Haider Fiber Network',
-      accountNumber: '0300-1234567',
-      note: 'JazzCash سے رقم بھیجنے کے بعد Transaction ID درج کریں۔'
+      accountTitle: 'Asmatullah',
+      accountNumber: '03067303029',
+      note:
+        'JazzCash پر رقم بھیجنے کے بعد Transaction ID درج کریں یا رسید اپ لوڈ کریں۔'
     },
 
     raast: {
       title: 'Raast ID',
-      accountTitle: 'Haider Fiber Network',
-      accountNumber: '0300-1234567',
-      note: 'Raast ID پر رقم بھیج کر Transaction ID یا رسید فراہم کریں۔'
+      accountTitle: 'Asmatullah',
+      accountNumber: '03067303029',
+      note:
+        'Raast ID پر رقم بھیجنے کے بعد Transaction ID درج کریں یا رسید اپ لوڈ کریں۔'
     },
 
-    bank: {
-      title: 'Bank Transfer',
-      accountTitle: 'Haider Fiber Network',
-      accountNumber: 'ACCOUNT NUMBER HERE',
-      note: 'Bank transfer مکمل ہونے کے بعد Transaction ID یا رسید فراہم کریں۔'
+    sadapay: {
+      title: 'SadaPay',
+      accountTitle: 'Asmatullah',
+      accountNumber: '03067311162',
+      note:
+        'SadaPay پر رقم بھیجنے کے بعد Transaction ID درج کریں یا رسید اپ لوڈ کریں۔'
+    },
+
+    nayapay: {
+      title: 'NayaPay',
+      accountTitle: 'Asmatullah',
+      accountNumber: '03067311162',
+      note:
+        'NayaPay پر رقم بھیجنے کے بعد Transaction ID درج کریں یا رسید اپ لوڈ کریں۔'
     }
   };
 
   // =========================================================
-  // LOAD CUSTOMER + BILLING
+  // LOAD CUSTOMER + BILL + FULL HISTORY
   // =========================================================
 
   const loadBillingData = async () => {
@@ -161,9 +202,9 @@ export default function PayBillPage() {
         );
       }
 
-      // -----------------------------------------------------
+      // =====================================================
       // CUSTOMER
-      // -----------------------------------------------------
+      // =====================================================
 
       const {
         data: custData,
@@ -195,9 +236,10 @@ export default function PayBillPage() {
         );
       }
 
-      // -----------------------------------------------------
-      // ALL COLLECTIONS FOR TOTAL PAID
-      // -----------------------------------------------------
+      // =====================================================
+      // COLLECTIONS
+      // Cash / Admin Collected Payments
+      // =====================================================
 
       const {
         data: collections,
@@ -208,7 +250,9 @@ export default function PayBillPage() {
           id,
           paid_amount,
           remaining_balance,
-          payment_date
+          payment_date,
+          payment_method,
+          receipt_number
         `)
         .eq('customer_id', customerId)
         .order('id', {
@@ -219,15 +263,44 @@ export default function PayBillPage() {
         throw collectionsError;
       }
 
-      // -----------------------------------------------------
-      // TOTAL PAID
-      // -----------------------------------------------------
+      // =====================================================
+      // ONLINE PAYMENTS
+      // =====================================================
+
+      const {
+        data: onlinePayments,
+        error: onlineError
+      } = await supabase
+        .from('online_payments')
+        .select(`
+          id,
+          amount,
+          payment_method,
+          transaction_id,
+          receipt_url,
+          status,
+          created_at
+        `)
+        .eq('customer_id', customerId)
+        .order('created_at', {
+          ascending: false
+        });
+
+      if (onlineError) {
+        throw onlineError;
+      }
+
+      // =====================================================
+      // BILL CALCULATION
+      // =====================================================
 
       const paidSum =
         (collections || []).reduce(
           (sum: number, item: any) =>
             sum +
-            Number(item.paid_amount || 0),
+            Number(
+              item.paid_amount || 0
+            ),
           0
         );
 
@@ -244,23 +317,18 @@ export default function PayBillPage() {
       let totalDue = 0;
       let previousArrears = 0;
 
-      // -----------------------------------------------------
-      // IMPORTANT:
-      // اگر collection موجود ہے تو latest remaining ہی total due ہے
-      // monthly bill دوبارہ add نہیں کریں گے
-      // -----------------------------------------------------
-
       if (
         collections &&
         collections.length > 0
       ) {
-        totalDue = Math.max(
-          0,
-          Number(
-            collections[0]
-              .remaining_balance || 0
-          )
-        );
+        totalDue =
+          Math.max(
+            0,
+            Number(
+              collections[0]
+                .remaining_balance || 0
+            )
+          );
 
         previousArrears =
           Math.max(
@@ -276,32 +344,129 @@ export default function PayBillPage() {
           monthlyBill;
       }
 
-      // -----------------------------------------------------
-      // CHECK PENDING ONLINE PAYMENT
-      // -----------------------------------------------------
+      // =====================================================
+      // PENDING PAYMENT
+      // =====================================================
 
-      const {
-        data: pendingData,
-        error: pendingError
-      } = await supabase
-        .from('online_payments')
-        .select('id, amount, status')
-        .eq('customer_id', customerId)
-        .eq('status', 'pending')
-        .limit(1);
-
-      if (pendingError) {
-        console.error(
-          'Pending payment check:',
-          pendingError
+      const hasPending =
+        (onlinePayments || []).some(
+          (item: any) =>
+            String(
+              item.status || ''
+            ).toLowerCase() ===
+            'pending'
         );
-      }
 
       setPendingPayment(
-        !!(
-          pendingData &&
-          pendingData.length > 0
-        )
+        hasPending
+      );
+
+      // =====================================================
+      // CASH / COLLECTION HISTORY
+      // =====================================================
+
+      const collectionHistory:
+        PaymentHistoryItem[] =
+        (collections || [])
+          .filter(
+            (item: any) =>
+              Number(
+                item.paid_amount || 0
+              ) > 0
+          )
+          .map((item: any) => ({
+            uniqueId:
+              `collection-${item.id}`,
+
+            source:
+              'collection' as const,
+
+            amount:
+              Number(
+                item.paid_amount || 0
+              ),
+
+            paymentMethod:
+              item.payment_method ||
+              'cash',
+
+            transactionId:
+              item.receipt_number ||
+              `COL-${item.id}`,
+
+            status: 'paid',
+
+            paymentDate:
+              item.payment_date ||
+              '',
+
+            receiptUrl: null
+          }));
+
+      // =====================================================
+      // ONLINE HISTORY
+      // =====================================================
+
+      const onlineHistory:
+        PaymentHistoryItem[] =
+        (onlinePayments || []).map(
+          (item: any) => ({
+            uniqueId:
+              `online-${item.id}`,
+
+            source:
+              'online' as const,
+
+            amount:
+              Number(
+                item.amount || 0
+              ),
+
+            paymentMethod:
+              item.payment_method ||
+              'online',
+
+            transactionId:
+              item.transaction_id ||
+              '-',
+
+            status:
+              item.status ||
+              'pending',
+
+            paymentDate:
+              item.created_at ||
+              '',
+
+            receiptUrl:
+              item.receipt_url ||
+              null
+          })
+        );
+
+      // =====================================================
+      // MERGE BOTH HISTORIES
+      // =====================================================
+
+      const mergedHistory = [
+        ...collectionHistory,
+        ...onlineHistory
+      ].sort((a, b) => {
+        const dateA =
+          new Date(
+            a.paymentDate
+          ).getTime();
+
+        const dateB =
+          new Date(
+            b.paymentDate
+          ).getTime();
+
+        return dateB - dateA;
+      });
+
+      setPaymentHistory(
+        mergedHistory
       );
 
       setCustomer(
@@ -351,7 +516,11 @@ export default function PayBillPage() {
 
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
+    if (
+      !file.type.startsWith(
+        'image/'
+      )
+    ) {
       setErrorMsg(
         'صرف تصویر اپ لوڈ کریں۔'
       );
@@ -366,23 +535,34 @@ export default function PayBillPage() {
 
     reader.readAsDataURL(file);
 
-    reader.onload = (event) => {
-      const img = new Image();
+    reader.onload = (
+      event
+    ) => {
+      const img =
+        new Image();
 
       img.src =
-        event.target?.result as string;
+        event.target
+          ?.result as string;
 
       img.onload = () => {
-        let width = img.width;
-        let height = img.height;
+        let width =
+          img.width;
+
+        let height =
+          img.height;
 
         const maxWidth = 500;
 
-        if (width > maxWidth) {
-          height = Math.round(
-            (height * maxWidth) /
-              width
-          );
+        if (
+          width > maxWidth
+        ) {
+          height =
+            Math.round(
+              (height *
+                maxWidth) /
+                width
+            );
 
           width = maxWidth;
         }
@@ -392,14 +572,21 @@ export default function PayBillPage() {
             'canvas'
           );
 
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width =
+          width;
+
+        canvas.height =
+          height;
 
         const ctx =
-          canvas.getContext('2d');
+          canvas.getContext(
+            '2d'
+          );
 
         if (!ctx) {
-          setCompressing(false);
+          setCompressing(
+            false
+          );
 
           setErrorMsg(
             'تصویر process نہیں ہو سکی۔'
@@ -408,8 +595,8 @@ export default function PayBillPage() {
           return;
         }
 
-        // White background for JPEG
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle =
+          '#ffffff';
 
         ctx.fillRect(
           0,
@@ -426,7 +613,8 @@ export default function PayBillPage() {
           height
         );
 
-        let quality = 0.65;
+        let quality =
+          0.65;
 
         let compressedDataUrl =
           canvas.toDataURL(
@@ -434,13 +622,13 @@ export default function PayBillPage() {
             quality
           );
 
-        // تقریباً 15KB data URL target
         while (
           compressedDataUrl.length >
             20000 &&
           quality > 0.15
         ) {
-          quality -= 0.05;
+          quality -=
+            0.05;
 
           compressedDataUrl =
             canvas.toDataURL(
@@ -453,179 +641,264 @@ export default function PayBillPage() {
           compressedDataUrl
         );
 
-        setReceiptImage(file);
+        setReceiptImage(
+          file
+        );
 
-        setCompressing(false);
-      };
-
-      img.onerror = () => {
-        setCompressing(false);
-
-        setErrorMsg(
-          'تصویر پڑھنے میں خرابی پیش آئی۔'
+        setCompressing(
+          false
         );
       };
+
+      img.onerror =
+        () => {
+          setCompressing(
+            false
+          );
+
+          setErrorMsg(
+            'تصویر پڑھنے میں خرابی پیش آئی۔'
+          );
+        };
     };
 
-    reader.onerror = () => {
-      setCompressing(false);
+    reader.onerror =
+      () => {
+        setCompressing(
+          false
+        );
 
-      setErrorMsg(
-        'فائل پڑھنے میں خرابی پیش آئی۔'
-      );
-    };
+        setErrorMsg(
+          'فائل پڑھنے میں خرابی پیش آئی۔'
+        );
+      };
   };
 
   // =========================================================
   // SUBMIT PAYMENT
   // =========================================================
 
-  const handleSubmitPayment = async (
-    e: React.FormEvent
-  ) => {
-    e.preventDefault();
+  const handleSubmitPayment =
+    async (
+      e: React.FormEvent
+    ) => {
+      e.preventDefault();
 
-    if (!customer) {
-      setErrorMsg(
-        'Customer record موجود نہیں ہے۔'
-      );
-      return;
-    }
+      if (!customer) {
+        setErrorMsg(
+          'Customer record موجود نہیں ہے۔'
+        );
 
-    if (pendingPayment) {
-      setErrorMsg(
-        'آپ کی ایک پیمنٹ پہلے ہی Verification کے لیے Pending ہے۔ ایڈمن کی تصدیق کا انتظار کریں۔'
-      );
-      return;
-    }
-
-    const numericAmount =
-      Number(amountPaid);
-
-    if (
-      !numericAmount ||
-      numericAmount <= 0
-    ) {
-      setErrorMsg(
-        'درست رقم درج کریں۔'
-      );
-      return;
-    }
-
-    if (
-      numericAmount >
-      billingStats.totalDue
-    ) {
-      setErrorMsg(
-        `آپ کے کل واجبات Rs ${billingStats.totalDue.toLocaleString()} ہیں۔ اس سے زیادہ رقم submit نہیں کی جا سکتی۔`
-      );
-      return;
-    }
-
-    if (
-      !transactionId.trim() &&
-      !receiptBase64
-    ) {
-      setErrorMsg(
-        'براہِ کرم Transaction ID درج کریں یا رسید کی تصویر اپ لوڈ کریں۔'
-      );
-      return;
-    }
-
-    setLoading(true);
-    setErrorMsg('');
-    setSuccessMsg('');
-
-    try {
-      // -----------------------------------------------------
-      // دوبارہ pending check تاکہ double submit نہ ہو
-      // -----------------------------------------------------
-
-      const {
-        data: existingPending,
-        error: pendingCheckError
-      } = await supabase
-        .from('online_payments')
-        .select('id')
-        .eq(
-          'customer_id',
-          customer.id
-        )
-        .eq('status', 'pending')
-        .limit(1);
-
-      if (pendingCheckError) {
-        throw pendingCheckError;
+        return;
       }
 
       if (
-        existingPending &&
-        existingPending.length > 0
+        pendingPayment
       ) {
-        setPendingPayment(true);
+        setErrorMsg(
+          'آپ کی ایک پیمنٹ پہلے ہی Verification کے لیے Pending ہے۔ ایڈمن کی تصدیق کا انتظار کریں۔'
+        );
 
-        throw new Error(
-          'آپ کی ایک پیمنٹ پہلے ہی Pending ہے۔'
+        return;
+      }
+
+      const numericAmount =
+        Number(
+          amountPaid
+        );
+
+      if (
+        !numericAmount ||
+        numericAmount <= 0
+      ) {
+        setErrorMsg(
+          'درست رقم درج کریں۔'
+        );
+
+        return;
+      }
+
+      if (
+        numericAmount >
+        billingStats.totalDue
+      ) {
+        setErrorMsg(
+          `آپ کے کل واجبات Rs ${billingStats.totalDue.toLocaleString()} ہیں۔ اس سے زیادہ رقم submit نہیں کی جا سکتی۔`
+        );
+
+        return;
+      }
+
+      if (
+        !transactionId.trim() &&
+        !receiptBase64
+      ) {
+        setErrorMsg(
+          'براہِ کرم Transaction ID درج کریں یا رسید کی تصویر اپ لوڈ کریں۔'
+        );
+
+        return;
+      }
+
+      setLoading(true);
+      setErrorMsg('');
+      setSuccessMsg('');
+
+      try {
+        // ===================================================
+        // DOUBLE SUBMIT CHECK
+        // ===================================================
+
+        const {
+          data:
+            existingPending,
+          error:
+            pendingCheckError
+        } = await supabase
+          .from(
+            'online_payments'
+          )
+          .select('id')
+          .eq(
+            'customer_id',
+            customer.id
+          )
+          .eq(
+            'status',
+            'pending'
+          )
+          .limit(1);
+
+        if (
+          pendingCheckError
+        ) {
+          throw pendingCheckError;
+        }
+
+        if (
+          existingPending &&
+          existingPending.length >
+            0
+        ) {
+          setPendingPayment(
+            true
+          );
+
+          throw new Error(
+            'آپ کی ایک پیمنٹ پہلے ہی Pending ہے۔'
+          );
+        }
+
+        // ===================================================
+        // SAVE ONLINE PAYMENT
+        // ===================================================
+
+        const {
+          error:
+            insertError
+        } = await supabase
+          .from(
+            'online_payments'
+          )
+          .insert([
+            {
+              customer_id:
+                customer.id,
+
+              amount:
+                numericAmount,
+
+              payment_method:
+                paymentMethod,
+
+              transaction_id:
+                transactionId.trim() ||
+                'RECEIPT-UPLOADED',
+
+              receipt_url:
+                receiptBase64 ||
+                null,
+
+              status:
+                'pending'
+            }
+          ]);
+
+        if (
+          insertError
+        ) {
+          throw insertError;
+        }
+
+        setPendingPayment(
+          true
+        );
+
+        setSuccessMsg(
+          'آپ کی پیمنٹ کامیابی سے Verification کے لیے بھیج دی گئی ہے۔ تصدیق کے بعد بقایا خودکار طور پر اپڈیٹ ہو جائے گا۔'
+        );
+
+        setTransactionId(
+          ''
+        );
+
+        setReceiptBase64(
+          ''
+        );
+
+        setReceiptImage(
+          null
+        );
+
+        // History refresh
+        await loadBillingData();
+      } catch (
+        err: any
+      ) {
+        console.error(
+          'Payment submit error:',
+          err
+        );
+
+        setErrorMsg(
+          err?.message ||
+            'پیمنٹ بھیجنے میں خرابی پیش آئی۔'
+        );
+      } finally {
+        setLoading(
+          false
         );
       }
+    };
 
-      // -----------------------------------------------------
-      // SAVE ONLINE PAYMENT
-      // -----------------------------------------------------
+  // =========================================================
+  // TOTAL HISTORY PAID
+  // =========================================================
 
-      const {
-        error: insertError
-      } = await supabase
-        .from('online_payments')
-        .insert([
-          {
-            customer_id:
-              customer.id,
-
-            amount:
-              numericAmount,
-
-            payment_method:
-              paymentMethod,
-
-            transaction_id:
-              transactionId.trim() ||
-              'RECEIPT-UPLOADED',
-
-            receipt_url:
-              receiptBase64 || null,
-
-            status: 'pending'
-          }
-        ]);
-
-      if (insertError) {
-        throw insertError;
-      }
-
-      setPendingPayment(true);
-
-      setSuccessMsg(
-        'آپ کی پیمنٹ ریکویسٹ کامیابی سے ایڈمن کو بھیج دی گئی ہے۔ Verification کے بعد آپ کا بقایا خودکار طور پر اپڈیٹ ہو جائے گا۔'
-      );
-
-      setTransactionId('');
-      setReceiptBase64('');
-      setReceiptImage(null);
-    } catch (err: any) {
-      console.error(
-        'Payment submit error:',
-        err
-      );
-
-      setErrorMsg(
-        err?.message ||
-          'پیمنٹ بھیجنے میں خرابی پیش آئی۔'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  const historyPaidTotal =
+    useMemo(() => {
+      return paymentHistory
+        .filter(
+          item =>
+            normalizeStatus(
+              item.status
+            ) === 'paid'
+        )
+        .reduce(
+          (
+            total,
+            item
+          ) =>
+            total +
+            Number(
+              item.amount ||
+                0
+            ),
+          0
+        );
+    }, [
+      paymentHistory
+    ]);
 
   // =========================================================
   // LOADING
@@ -633,16 +906,32 @@ export default function PayBillPage() {
 
   if (pageLoading) {
     return (
-      <Layout showNavButtons={false}>
+      <Layout
+        showNavButtons={
+          false
+        }
+      >
         <div
           style={{
-            minHeight: '300px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'column',
+            minHeight:
+              '300px',
+
+            display:
+              'flex',
+
+            alignItems:
+              'center',
+
+            justifyContent:
+              'center',
+
+            flexDirection:
+              'column',
+
             gap: '10px',
-            color: '#38bdf8'
+
+            color:
+              '#38bdf8'
           }}
         >
           <Loader2
@@ -652,10 +941,13 @@ export default function PayBillPage() {
 
           <span
             style={{
-              fontSize: '12px'
+              fontSize:
+                '12px'
             }}
           >
-            بل کی معلومات لوڈ ہو رہی ہیں...
+            بل اور ادائیگیوں
+            کی معلومات لوڈ ہو
+            رہی ہیں...
           </span>
         </div>
       </Layout>
@@ -663,99 +955,228 @@ export default function PayBillPage() {
   }
 
   const selectedPayment =
-    paymentDetails[paymentMethod];
+    paymentDetails[
+      paymentMethod
+    ];
 
   return (
-    <Layout showNavButtons={false}>
+    <Layout
+      showNavButtons={
+        false
+      }
+    >
       <div
         style={{
-          display: 'flex',
-          flexDirection: 'column',
+          display:
+            'flex',
+
+          flexDirection:
+            'column',
+
           gap: '16px',
+
           width: '100%',
-          maxWidth: '850px',
-          margin: '0 auto'
+
+          maxWidth:
+            '850px',
+
+          margin:
+            '0 auto'
         }}
       >
-        {/* HEADER */}
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
         <div
           style={{
             background:
               'linear-gradient(135deg,#10253e,#0b1e33)',
+
             border:
               '1px solid #10b981',
-            padding: '14px 16px',
-            borderRadius: '15px',
-            display: 'flex',
-            alignItems: 'center',
+
+            padding:
+              '14px 16px',
+
+            borderRadius:
+              '15px',
+
+            display:
+              'flex',
+
+            alignItems:
+              'center',
+
+            justifyContent:
+              'space-between',
+
             gap: '10px'
           }}
         >
           <div
             style={{
-              backgroundColor:
-                'rgba(16,185,129,0.18)',
-              padding: '9px',
-              borderRadius: '10px',
-              color: '#34d399'
-            }}
-          >
-            <CreditCard size={21} />
-          </div>
+              display:
+                'flex',
 
-          <div>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: '16px',
-                color: '#ffffff',
-                fontWeight: '900'
-              }}
-            >
-              آن لائن بل ادائیگی
-            </h2>
+              alignItems:
+                'center',
 
-            <p
-              style={{
-                margin: '3px 0 0',
-                fontSize: '10px',
-                color: '#93c5fd'
-              }}
-            >
-              ONE CLICK • HAIDER FIBER NETWORK
-            </p>
-          </div>
-        </div>
-
-        {/* CUSTOMER INFO */}
-
-        {customer && (
-          <div
-            style={{
-              backgroundColor: '#1c2541',
-              border:
-                '1px solid #334155',
-              borderRadius: '14px',
-              padding: '14px'
+              gap: '10px'
             }}
           >
             <div
               style={{
-                display: 'grid',
+                backgroundColor:
+                  'rgba(16,185,129,0.18)',
+
+                padding:
+                  '9px',
+
+                borderRadius:
+                  '10px',
+
+                color:
+                  '#34d399'
+              }}
+            >
+              <CreditCard
+                size={21}
+              />
+            </div>
+
+            <div>
+              <h2
+                style={{
+                  margin: 0,
+
+                  fontSize:
+                    '16px',
+
+                  color:
+                    '#ffffff',
+
+                  fontWeight:
+                    '900'
+                }}
+              >
+                آن لائن بل
+                ادائیگی
+              </h2>
+
+              <p
+                style={{
+                  margin:
+                    '3px 0 0',
+
+                  fontSize:
+                    '10px',
+
+                  color:
+                    '#93c5fd'
+                }}
+              >
+                ONE CLICK •
+                HAIDER FIBER
+                NETWORK
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              loadBillingData()
+            }
+            style={{
+              width: '36px',
+              height: '36px',
+
+              borderRadius:
+                '10px',
+
+              border:
+                '1px solid #334155',
+
+              backgroundColor:
+                '#0f172a',
+
+              color:
+                '#38bdf8',
+
+              display:
+                'flex',
+
+              alignItems:
+                'center',
+
+              justifyContent:
+                'center',
+
+              cursor:
+                'pointer'
+            }}
+            title="Refresh"
+          >
+            <RefreshCw
+              size={16}
+            />
+          </button>
+        </div>
+
+        {/* =================================================
+            CUSTOMER INFO
+        ================================================= */}
+
+        {customer && (
+          <div
+            style={{
+              backgroundColor:
+                '#1c2541',
+
+              border:
+                '1px solid #334155',
+
+              borderRadius:
+                '14px',
+
+              padding:
+                '14px'
+            }}
+          >
+            <div
+              style={{
+                display:
+                  'grid',
+
                 gridTemplateColumns:
-                  'repeat(auto-fit,minmax(150px,1fr))',
+                  'repeat(auto-fit,minmax(145px,1fr))',
+
                 gap: '10px'
               }}
             >
               <InfoBox
-                icon={<User size={15} />}
+                icon={
+                  <User
+                    size={
+                      15
+                    }
+                  />
+                }
                 title="صارف"
-                value={customer.full_name}
+                value={
+                  customer.full_name
+                }
               />
 
               <InfoBox
-                icon={<Receipt size={15} />}
+                icon={
+                  <Receipt
+                    size={
+                      15
+                    }
+                  />
+                }
                 title="HFN ID"
                 value={
                   customer.serial_number ||
@@ -764,7 +1185,13 @@ export default function PayBillPage() {
               />
 
               <InfoBox
-                icon={<Wifi size={15} />}
+                icon={
+                  <Wifi
+                    size={
+                      15
+                    }
+                  />
+                }
                 title="PPPoE"
                 value={
                   customer.pppoe_username
@@ -772,43 +1199,75 @@ export default function PayBillPage() {
               />
 
               <InfoBox
-                icon={<Wifi size={15} />}
+                icon={
+                  <Wifi
+                    size={
+                      15
+                    }
+                  />
+                }
                 title="Package"
-                value={`${customer.package_name || '---'} • ${customer.speed || '---'}`}
+                value={`${
+                  customer.package_name ||
+                  '---'
+                } • ${
+                  customer.speed ||
+                  '---'
+                }`}
               />
             </div>
           </div>
         )}
 
-        {/* BILL BREAKDOWN */}
+        {/* =================================================
+            BILL DETAILS
+        ================================================= */}
 
         <div
           style={{
-            backgroundColor: '#1c2541',
+            backgroundColor:
+              '#1c2541',
+
             border:
               '1px solid #334155',
-            borderRadius: '14px',
-            padding: '16px'
+
+            borderRadius:
+              '14px',
+
+            padding:
+              '16px'
           }}
         >
           <h3
             style={{
-              margin: '0 0 12px',
-              fontSize: '13px',
-              color: '#38bdf8',
+              margin:
+                '0 0 12px',
+
+              fontSize:
+                '13px',
+
+              color:
+                '#38bdf8',
+
               borderBottom:
                 '1px solid #334155',
-              paddingBottom: '8px'
+
+              paddingBottom:
+                '8px'
             }}
           >
-            واجبات و بل تفصیلات
+            واجبات و بل
+            تفصیلات
           </h3>
 
           <div
             style={{
-              display: 'grid',
+              display:
+                'grid',
+
               gridTemplateColumns:
                 'repeat(auto-fit,minmax(140px,1fr))',
+
               gap: '10px'
             }}
           >
@@ -846,30 +1305,47 @@ export default function PayBillPage() {
           </div>
         </div>
 
-        {/* PENDING NOTICE */}
+        {/* =================================================
+            PENDING
+        ================================================= */}
 
         {pendingPayment && (
           <div
             style={{
               backgroundColor:
                 'rgba(245,158,11,0.14)',
+
               border:
                 '1px solid #f59e0b',
-              color: '#fbbf24',
-              padding: '12px',
-              borderRadius: '11px',
-              fontSize: '12px',
-              display: 'flex',
+
+              color:
+                '#fbbf24',
+
+              padding:
+                '12px',
+
+              borderRadius:
+                '11px',
+
+              fontSize:
+                '12px',
+
+              display:
+                'flex',
+
               gap: '8px',
-              alignItems: 'center'
+
+              alignItems:
+                'center'
             }}
           >
-            <Clock size={17} />
+            <Clock
+              size={17}
+            />
 
-            آپ کی ایک Online Payment
-            پہلے ہی Pending ہے۔ ایڈمن
-            Verification کے بعد balance
-            اپڈیٹ ہوگا۔
+            آپ کی ایک Online
+            Payment Verification
+            کے لیے Pending ہے۔
           </div>
         )}
 
@@ -880,18 +1356,35 @@ export default function PayBillPage() {
             style={{
               backgroundColor:
                 'rgba(16,185,129,0.15)',
+
               border:
                 '1px solid #10b981',
-              color: '#34d399',
-              padding: '12px',
-              borderRadius: '10px',
-              fontSize: '12px',
-              display: 'flex',
-              alignItems: 'center',
+
+              color:
+                '#34d399',
+
+              padding:
+                '12px',
+
+              borderRadius:
+                '10px',
+
+              fontSize:
+                '12px',
+
+              display:
+                'flex',
+
+              alignItems:
+                'center',
+
               gap: '8px'
             }}
           >
-            <CheckCircle2 size={17} />
+            <CheckCircle2
+              size={17}
+            />
+
             {successMsg}
           </div>
         )}
@@ -903,56 +1396,94 @@ export default function PayBillPage() {
             style={{
               backgroundColor:
                 'rgba(239,68,68,0.15)',
+
               border:
                 '1px solid #ef4444',
-              color: '#f87171',
-              padding: '12px',
-              borderRadius: '10px',
-              fontSize: '12px',
-              display: 'flex',
-              alignItems: 'center',
+
+              color:
+                '#f87171',
+
+              padding:
+                '12px',
+
+              borderRadius:
+                '10px',
+
+              fontSize:
+                '12px',
+
+              display:
+                'flex',
+
+              alignItems:
+                'center',
+
               gap: '8px'
             }}
           >
-            <AlertCircle size={17} />
+            <AlertCircle
+              size={17}
+            />
+
             {errorMsg}
           </div>
         )}
 
-        {/* PAYMENT FORM */}
+        {/* =================================================
+            PAYMENT FORM
+        ================================================= */}
 
         <form
           onSubmit={
             handleSubmitPayment
           }
           style={{
-            backgroundColor: '#1c2541',
+            backgroundColor:
+              '#1c2541',
+
             border:
               '1px solid #334155',
-            borderRadius: '14px',
-            padding: '16px',
-            display: 'flex',
-            flexDirection: 'column',
+
+            borderRadius:
+              '14px',
+
+            padding:
+              '16px',
+
+            display:
+              'flex',
+
+            flexDirection:
+              'column',
+
             gap: '14px'
           }}
         >
           <h3
             style={{
               margin: 0,
-              fontSize: '13px',
-              color: '#38bdf8'
+
+              fontSize:
+                '13px',
+
+              color:
+                '#38bdf8'
             }}
           >
-            ادائیگی کا طریقہ منتخب کریں
+            ادائیگی کا طریقہ
+            منتخب کریں
           </h3>
 
-          {/* METHODS */}
+          {/* PAYMENT METHODS */}
 
           <div
             style={{
-              display: 'grid',
+              display:
+                'grid',
+
               gridTemplateColumns:
-                'repeat(auto-fit,minmax(125px,1fr))',
+                'repeat(auto-fit,minmax(115px,1fr))',
+
               gap: '8px'
             }}
           >
@@ -964,7 +1495,11 @@ export default function PayBillPage() {
               title="Easypaisa"
               color="#10b981"
               icon={
-                <Smartphone size={19} />
+                <Smartphone
+                  size={
+                    19
+                  }
+                />
               }
               onClick={() =>
                 setPaymentMethod(
@@ -981,7 +1516,11 @@ export default function PayBillPage() {
               title="JazzCash"
               color="#ef4444"
               icon={
-                <Smartphone size={19} />
+                <Smartphone
+                  size={
+                    19
+                  }
+                />
               }
               onClick={() =>
                 setPaymentMethod(
@@ -998,25 +1537,58 @@ export default function PayBillPage() {
               title="Raast ID"
               color="#f59e0b"
               icon={
-                <QrCode size={19} />
+                <QrCode
+                  size={
+                    19
+                  }
+                />
               }
               onClick={() =>
-                setPaymentMethod('raast')
+                setPaymentMethod(
+                  'raast'
+                )
               }
             />
 
             <PaymentButton
               active={
                 paymentMethod ===
-                'bank'
+                'sadapay'
               }
-              title="Bank"
-              color="#3b82f6"
+              title="SadaPay"
+              color="#8b5cf6"
               icon={
-                <Building size={19} />
+                <Wallet
+                  size={
+                    19
+                  }
+                />
               }
               onClick={() =>
-                setPaymentMethod('bank')
+                setPaymentMethod(
+                  'sadapay'
+                )
+              }
+            />
+
+            <PaymentButton
+              active={
+                paymentMethod ===
+                'nayapay'
+              }
+              title="NayaPay"
+              color="#3b82f6"
+              icon={
+                <Wallet
+                  size={
+                    19
+                  }
+                />
+              }
+              onClick={() =>
+                setPaymentMethod(
+                  'nayapay'
+                )
               }
             />
           </div>
@@ -1025,54 +1597,109 @@ export default function PayBillPage() {
 
           <div
             style={{
-              backgroundColor: '#0f172a',
+              backgroundColor:
+                '#0f172a',
+
               border:
                 '1px solid #334155',
+
               borderLeft:
                 '3px solid #38bdf8',
-              padding: '12px',
-              borderRadius: '9px'
+
+              padding:
+                '13px',
+
+              borderRadius:
+                '9px'
             }}
           >
             <div
               style={{
-                fontSize: '12px',
-                fontWeight: 'bold',
-                color: '#ffffff'
+                display:
+                  'flex',
+
+                justifyContent:
+                  'space-between',
+
+                alignItems:
+                  'center',
+
+                gap: '10px'
               }}
             >
-              {
-                selectedPayment.title
-              }
+              <div>
+                <div
+                  style={{
+                    fontSize:
+                      '13px',
+
+                    fontWeight:
+                      '900',
+
+                    color:
+                      '#ffffff'
+                  }}
+                >
+                  {
+                    selectedPayment.title
+                  }
+                </div>
+
+                <div
+                  style={{
+                    marginTop:
+                      '5px',
+
+                    fontSize:
+                      '11px',
+
+                    color:
+                      '#94a3b8'
+                  }}
+                >
+                  Account
+                  Title:{' '}
+                  <strong
+                    style={{
+                      color:
+                        '#ffffff'
+                    }}
+                  >
+                    {
+                      selectedPayment.accountTitle
+                    }
+                  </strong>
+                </div>
+              </div>
+
+              <Wallet
+                size={22}
+                color="#38bdf8"
+              />
             </div>
 
             <div
               style={{
-                marginTop: '6px',
-                fontSize: '11px',
-                color: '#94a3b8'
-              }}
-            >
-              Account Title:{' '}
-              <strong
-                style={{
-                  color: '#ffffff'
-                }}
-              >
-                {
-                  selectedPayment.accountTitle
-                }
-              </strong>
-            </div>
+                marginTop:
+                  '9px',
 
-            <div
-              style={{
-                marginTop: '4px',
-                fontSize: '12px',
-                color: '#38bdf8',
-                direction: 'ltr',
-                textAlign: 'left',
-                fontWeight: 'bold'
+                fontSize:
+                  '17px',
+
+                color:
+                  '#38bdf8',
+
+                direction:
+                  'ltr',
+
+                textAlign:
+                  'left',
+
+                fontWeight:
+                  '900',
+
+                letterSpacing:
+                  '0.5px'
               }}
             >
               {
@@ -1082,12 +1709,19 @@ export default function PayBillPage() {
 
             <div
               style={{
-                marginTop: '7px',
-                fontSize: '10px',
-                color: '#64748b'
+                marginTop:
+                  '8px',
+
+                fontSize:
+                  '10px',
+
+                color:
+                  '#64748b'
               }}
             >
-              {selectedPayment.note}
+              {
+                selectedPayment.note
+              }
             </div>
           </div>
 
@@ -1095,10 +1729,12 @@ export default function PayBillPage() {
 
           <div>
             <label
-              style={labelStyle}
+              style={
+                labelStyle
+              }
             >
-              جمع کی جانے والی رقم (Rs)
-              *
+              جمع کی جانے والی
+              رقم (Rs) *
             </label>
 
             <input
@@ -1108,8 +1744,10 @@ export default function PayBillPage() {
                 billingStats.totalDue ||
                 undefined
               }
-              value={amountPaid}
-              onChange={(e) =>
+              value={
+                amountPaid
+              }
+              onChange={e =>
                 setAmountPaid(
                   e.target.value
                 )
@@ -1117,9 +1755,12 @@ export default function PayBillPage() {
               required
               disabled={
                 pendingPayment ||
-                billingStats.totalDue <= 0
+                billingStats.totalDue <=
+                  0
               }
-              style={inputStyle}
+              style={
+                inputStyle
+              }
             />
           </div>
 
@@ -1127,24 +1768,32 @@ export default function PayBillPage() {
 
           <div>
             <label
-              style={labelStyle}
+              style={
+                labelStyle
+              }
             >
-              Transaction ID / TRX ID
+              Transaction ID /
+              TRX ID
             </label>
 
             <input
               type="text"
               placeholder="مثلاً: 9876543210"
-              value={transactionId}
-              onChange={(e) =>
+              value={
+                transactionId
+              }
+              onChange={e =>
                 setTransactionId(
                   e.target.value
                 )
               }
-              disabled={pendingPayment}
+              disabled={
+                pendingPayment
+              }
               style={{
                 ...inputStyle,
-                direction: 'ltr'
+                direction:
+                  'ltr'
               }}
             />
           </div>
@@ -1153,7 +1802,9 @@ export default function PayBillPage() {
 
           <div>
             <label
-              style={labelStyle}
+              style={
+                labelStyle
+              }
             >
               رسید کی تصویر
             </label>
@@ -1165,10 +1816,13 @@ export default function PayBillPage() {
                 handleImageUpload
               }
               style={{
-                display: 'none'
+                display:
+                  'none'
               }}
               id="receipt-upload"
-              disabled={pendingPayment}
+              disabled={
+                pendingPayment
+              }
             />
 
             <label
@@ -1176,17 +1830,33 @@ export default function PayBillPage() {
               style={{
                 backgroundColor:
                   '#0f172a',
+
                 border:
                   '1px dashed #3b82f6',
-                color: '#38bdf8',
-                padding: '12px',
-                borderRadius: '9px',
-                fontSize: '11px',
-                display: 'flex',
-                alignItems: 'center',
+
+                color:
+                  '#38bdf8',
+
+                padding:
+                  '12px',
+
+                borderRadius:
+                  '9px',
+
+                fontSize:
+                  '11px',
+
+                display:
+                  'flex',
+
+                alignItems:
+                  'center',
+
                 justifyContent:
                   'center',
+
                 gap: '6px',
+
                 cursor:
                   pendingPayment
                     ? 'not-allowed'
@@ -1195,11 +1865,17 @@ export default function PayBillPage() {
             >
               {compressing ? (
                 <Loader2
-                  size={15}
+                  size={
+                    15
+                  }
                   className="animate-spin"
                 />
               ) : (
-                <Upload size={15} />
+                <Upload
+                  size={
+                    15
+                  }
+                />
               )}
 
               {compressing
@@ -1212,27 +1888,43 @@ export default function PayBillPage() {
             {receiptBase64 && (
               <div
                 style={{
-                  marginTop: '10px'
+                  marginTop:
+                    '10px'
                 }}
               >
                 <img
-                  src={receiptBase64}
+                  src={
+                    receiptBase64
+                  }
                   alt="Payment Receipt"
                   style={{
-                    maxWidth: '180px',
-                    maxHeight: '180px',
-                    borderRadius: '8px',
+                    maxWidth:
+                      '180px',
+
+                    maxHeight:
+                      '180px',
+
+                    borderRadius:
+                      '8px',
+
                     border:
                       '1px solid #334155',
-                    objectFit: 'contain'
+
+                    objectFit:
+                      'contain'
                   }}
                 />
 
                 <p
                   style={{
-                    margin: '4px 0 0',
-                    fontSize: '10px',
-                    color: '#34d399'
+                    margin:
+                      '4px 0 0',
+
+                    fontSize:
+                      '10px',
+
+                    color:
+                      '#34d399'
                   }}
                 >
                   ✓ رسید تیار ہے
@@ -1249,30 +1941,49 @@ export default function PayBillPage() {
               loading ||
               compressing ||
               pendingPayment ||
-              billingStats.totalDue <= 0
+              billingStats.totalDue <=
+                0
             }
             style={{
               backgroundColor:
                 pendingPayment ||
-                billingStats.totalDue <= 0
+                billingStats.totalDue <=
+                  0
                   ? '#475569'
                   : '#10b981',
 
-              color: '#ffffff',
-              padding: '11px',
-              borderRadius: '9px',
-              border: 'none',
-              fontWeight: 'bold',
-              fontSize: '12px',
+              color:
+                '#ffffff',
+
+              padding:
+                '12px',
+
+              borderRadius:
+                '9px',
+
+              border:
+                'none',
+
+              fontWeight:
+                '900',
+
+              fontSize:
+                '12px',
+
               cursor:
                 pendingPayment
                   ? 'not-allowed'
                   : 'pointer',
 
-              display: 'flex',
-              alignItems: 'center',
+              display:
+                'flex',
+
+              alignItems:
+                'center',
+
               justifyContent:
                 'center',
+
               gap: '6px'
             }}
           >
@@ -1282,10 +1993,13 @@ export default function PayBillPage() {
                 className="animate-spin"
               />
             ) : (
-              <Send size={16} />
+              <Send
+                size={16}
+              />
             )}
 
-            {billingStats.totalDue <= 0
+            {billingStats.totalDue <=
+            0
               ? 'آپ کا کوئی بقایا نہیں'
               : pendingPayment
                 ? 'Verification Pending'
@@ -1294,13 +2008,615 @@ export default function PayBillPage() {
                   : 'پیمنٹ ریکویسٹ ایڈمن کو بھیجیں'}
           </button>
         </form>
+
+        {/* =================================================
+            COMPLETE PAYMENT HISTORY
+        ================================================= */}
+
+        <div
+          style={{
+            backgroundColor:
+              '#1c2541',
+
+            border:
+              '1px solid #334155',
+
+            borderRadius:
+              '14px',
+
+            padding:
+              '16px'
+          }}
+        >
+          <div
+            style={{
+              display:
+                'flex',
+
+              justifyContent:
+                'space-between',
+
+              alignItems:
+                'center',
+
+              gap: '10px',
+
+              borderBottom:
+                '1px solid #334155',
+
+              paddingBottom:
+                '11px',
+
+              marginBottom:
+                '12px'
+            }}
+          >
+            <div
+              style={{
+                display:
+                  'flex',
+
+                alignItems:
+                  'center',
+
+                gap: '7px'
+              }}
+            >
+              <History
+                size={18}
+                color="#38bdf8"
+              />
+
+              <div>
+                <h3
+                  style={{
+                    margin: 0,
+
+                    fontSize:
+                      '14px',
+
+                    color:
+                      '#ffffff',
+
+                    fontWeight:
+                      '900'
+                  }}
+                >
+                  مکمل ادائیگی
+                  ہسٹری
+                </h3>
+
+                <div
+                  style={{
+                    marginTop:
+                      '3px',
+
+                    fontSize:
+                      '9px',
+
+                    color:
+                      '#94a3b8'
+                  }}
+                >
+                  Cash + Online
+                  Payments
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                backgroundColor:
+                  '#0f172a',
+
+                border:
+                  '1px solid #10b981',
+
+                borderRadius:
+                  '9px',
+
+                padding:
+                  '7px 9px',
+
+                textAlign:
+                  'right'
+              }}
+            >
+              <div
+                style={{
+                  fontSize:
+                    '8px',
+
+                  color:
+                    '#94a3b8'
+                }}
+              >
+                Paid History
+              </div>
+
+              <div
+                style={{
+                  fontSize:
+                    '12px',
+
+                  color:
+                    '#34d399',
+
+                  fontWeight:
+                    '900'
+                }}
+              >
+                Rs{' '}
+                {historyPaidTotal.toLocaleString()}
+              </div>
+            </div>
+          </div>
+
+          {paymentHistory.length ===
+          0 ? (
+            <div
+              style={{
+                backgroundColor:
+                  '#0f172a',
+
+                border:
+                  '1px dashed #334155',
+
+                borderRadius:
+                  '10px',
+
+                padding:
+                  '25px 12px',
+
+                textAlign:
+                  'center',
+
+                color:
+                  '#64748b',
+
+                fontSize:
+                  '11px'
+              }}
+            >
+              ابھی تک کوئی
+              ادائیگی ریکارڈ
+              موجود نہیں۔
+            </div>
+          ) : (
+            <div
+              style={{
+                display:
+                  'flex',
+
+                flexDirection:
+                  'column',
+
+                gap: '10px'
+              }}
+            >
+              {paymentHistory.map(
+                item => (
+                  <HistoryCard
+                    key={
+                      item.uniqueId
+                    }
+                    item={
+                      item
+                    }
+                  />
+                )
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </Layout>
   );
 }
 
 // ===========================================================
-// COMPONENTS
+// HISTORY CARD
+// ===========================================================
+
+function HistoryCard({
+  item
+}: {
+  item: PaymentHistoryItem;
+}) {
+  const normalized =
+    normalizeStatus(
+      item.status
+    );
+
+  const statusInfo =
+    getStatusInfo(
+      normalized
+    );
+
+  const methodInfo =
+    getMethodInfo(
+      item.paymentMethod,
+      item.source
+    );
+
+  return (
+    <div
+      style={{
+        backgroundColor:
+          '#0f172a',
+
+        border:
+          '1px solid #334155',
+
+        borderRadius:
+          '12px',
+
+        padding:
+          '12px'
+      }}
+    >
+      {/* TOP */}
+
+      <div
+        style={{
+          display:
+            'flex',
+
+          alignItems:
+            'center',
+
+          justifyContent:
+            'space-between',
+
+          gap: '10px'
+        }}
+      >
+        <div
+          style={{
+            display:
+              'flex',
+
+            alignItems:
+              'center',
+
+            gap: '8px'
+          }}
+        >
+          <div
+            style={{
+              width:
+                '36px',
+
+              height:
+                '36px',
+
+              borderRadius:
+                '10px',
+
+              backgroundColor:
+                methodInfo.background,
+
+              color:
+                methodInfo.color,
+
+              display:
+                'flex',
+
+              alignItems:
+                'center',
+
+              justifyContent:
+                'center'
+            }}
+          >
+            {item.source ===
+            'collection' ? (
+              <Banknote
+                size={18}
+              />
+            ) : (
+              <Smartphone
+                size={18}
+              />
+            )}
+          </div>
+
+          <div>
+            <div
+              style={{
+                color:
+                  '#ffffff',
+
+                fontSize:
+                  '12px',
+
+                fontWeight:
+                  '900'
+              }}
+            >
+              {
+                methodInfo.label
+              }
+            </div>
+
+            <div
+              style={{
+                color:
+                  '#64748b',
+
+                fontSize:
+                  '9px',
+
+                marginTop:
+                  '2px'
+              }}
+            >
+              {item.source ===
+              'collection'
+                ? 'Collection Payment'
+                : 'Online Payment'}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            textAlign:
+              'right'
+          }}
+        >
+          <div
+            style={{
+              color:
+                '#34d399',
+
+              fontSize:
+                '15px',
+
+              fontWeight:
+                '900'
+            }}
+          >
+            Rs{' '}
+            {item.amount.toLocaleString()}
+          </div>
+
+          <span
+            style={{
+              display:
+                'inline-block',
+
+              marginTop:
+                '4px',
+
+              padding:
+                '3px 7px',
+
+              borderRadius:
+                '20px',
+
+              fontSize:
+                '8px',
+
+              fontWeight:
+                '900',
+
+              color:
+                statusInfo.color,
+
+              backgroundColor:
+                statusInfo.background,
+
+              border: `1px solid ${statusInfo.border}`
+            }}
+          >
+            {
+              statusInfo.label
+            }
+          </span>
+        </div>
+      </div>
+
+      {/* DETAILS */}
+
+      <div
+        style={{
+          marginTop:
+            '11px',
+
+          paddingTop:
+            '10px',
+
+          borderTop:
+            '1px solid #1e293b',
+
+          display:
+            'grid',
+
+          gridTemplateColumns:
+            'repeat(auto-fit,minmax(135px,1fr))',
+
+          gap: '8px'
+        }}
+      >
+        <HistoryDetail
+          icon={
+            <CalendarDays
+              size={13}
+            />
+          }
+          title="تاریخ"
+          value={formatDate(
+            item.paymentDate
+          )}
+        />
+
+        <HistoryDetail
+          icon={
+            <Clock
+              size={13}
+            />
+          }
+          title="وقت"
+          value={formatTime(
+            item.paymentDate
+          )}
+        />
+
+        <HistoryDetail
+          icon={
+            <Wallet
+              size={13}
+            />
+          }
+          title="طریقہ"
+          value={
+            methodInfo.label
+          }
+        />
+
+        <HistoryDetail
+          icon={
+            <Hash
+              size={13}
+            />
+          }
+          title={
+            item.source ===
+            'collection'
+              ? 'Receipt No'
+              : 'Transaction ID'
+          }
+          value={
+            item.transactionId ||
+            '-'
+          }
+        />
+      </div>
+
+      {/* RECEIPT */}
+
+      {item.receiptUrl && (
+        <div
+          style={{
+            marginTop:
+              '10px'
+          }}
+        >
+          <a
+            href={
+              item.receiptUrl
+            }
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display:
+                'inline-flex',
+
+              alignItems:
+                'center',
+
+              gap: '5px',
+
+              color:
+                '#38bdf8',
+
+              backgroundColor:
+                'rgba(56,189,248,0.08)',
+
+              border:
+                '1px solid rgba(56,189,248,0.3)',
+
+              padding:
+                '6px 9px',
+
+              borderRadius:
+                '7px',
+
+              textDecoration:
+                'none',
+
+              fontSize:
+                '9px',
+
+              fontWeight:
+                'bold'
+            }}
+          >
+            <Receipt
+              size={12}
+            />
+
+            رسید دیکھیں
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===========================================================
+// HISTORY DETAIL
+// ===========================================================
+
+function HistoryDetail({
+  icon,
+  title,
+  value
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          display:
+            'flex',
+
+          alignItems:
+            'center',
+
+          gap: '4px',
+
+          color:
+            '#64748b',
+
+          fontSize:
+            '8px'
+        }}
+      >
+        {icon}
+        {title}
+      </div>
+
+      <div
+        style={{
+          marginTop:
+            '3px',
+
+          color:
+            '#cbd5e1',
+
+          fontSize:
+            '10px',
+
+          fontWeight:
+            'bold',
+
+          wordBreak:
+            'break-word'
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// ===========================================================
+// BILL CARD
 // ===========================================================
 
 function BillCard({
@@ -1315,16 +2631,25 @@ function BillCard({
   return (
     <div
       style={{
-        backgroundColor: '#0f172a',
-        padding: '11px',
-        borderRadius: '9px',
+        backgroundColor:
+          '#0f172a',
+
+        padding:
+          '11px',
+
+        borderRadius:
+          '9px',
+
         border: `1px solid ${color}`
       }}
     >
       <span
         style={{
-          fontSize: '10px',
-          color: '#94a3b8'
+          fontSize:
+            '10px',
+
+          color:
+            '#94a3b8'
         }}
       >
         {title}
@@ -1332,17 +2657,28 @@ function BillCard({
 
       <h4
         style={{
-          margin: '4px 0 0',
-          fontSize: '16px',
+          margin:
+            '4px 0 0',
+
+          fontSize:
+            '16px',
+
           color,
-          fontWeight: '900'
+
+          fontWeight:
+            '900'
         }}
       >
-        Rs {value.toLocaleString()}
+        Rs{' '}
+        {value.toLocaleString()}
       </h4>
     </div>
   );
 }
+
+// ===========================================================
+// INFO BOX
+// ===========================================================
 
 function InfoBox({
   icon,
@@ -1356,20 +2692,34 @@ function InfoBox({
   return (
     <div
       style={{
-        backgroundColor: '#0f172a',
-        padding: '10px',
-        borderRadius: '9px',
+        backgroundColor:
+          '#0f172a',
+
+        padding:
+          '10px',
+
+        borderRadius:
+          '9px',
+
         border:
           '1px solid #334155'
       }}
     >
       <div
         style={{
-          display: 'flex',
+          display:
+            'flex',
+
           gap: '5px',
-          alignItems: 'center',
-          color: '#38bdf8',
-          fontSize: '10px'
+
+          alignItems:
+            'center',
+
+          color:
+            '#38bdf8',
+
+          fontSize:
+            '10px'
         }}
       >
         {icon}
@@ -1378,10 +2728,17 @@ function InfoBox({
 
       <div
         style={{
-          marginTop: '5px',
-          color: '#ffffff',
-          fontSize: '12px',
-          fontWeight: 'bold'
+          marginTop:
+            '5px',
+
+          color:
+            '#ffffff',
+
+          fontSize:
+            '12px',
+
+          fontWeight:
+            'bold'
         }}
       >
         {value}
@@ -1389,6 +2746,10 @@ function InfoBox({
     </div>
   );
 }
+
+// ===========================================================
+// PAYMENT BUTTON
+// ===========================================================
 
 function PaymentButton({
   active,
@@ -1406,31 +2767,56 @@ function PaymentButton({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={
+        onClick
+      }
       style={{
-        backgroundColor: active
-          ? `${color}22`
-          : '#0f172a',
+        backgroundColor:
+          active
+            ? `${color}22`
+            : '#0f172a',
 
         border: `1px solid ${
-          active ? color : '#334155'
+          active
+            ? color
+            : '#334155'
         }`,
 
-        color: '#ffffff',
-        padding: '11px',
-        borderRadius: '10px',
-        cursor: 'pointer',
+        color:
+          '#ffffff',
 
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
+        padding:
+          '11px 7px',
+
+        borderRadius:
+          '10px',
+
+        cursor:
+          'pointer',
+
+        display:
+          'flex',
+
+        flexDirection:
+          'column',
+
+        alignItems:
+          'center',
+
         gap: '5px',
 
-        fontSize: '11px',
-        fontWeight: 'bold'
+        fontSize:
+          '10px',
+
+        fontWeight:
+          'bold'
       }}
     >
-      <span style={{ color }}>
+      <span
+        style={{
+          color
+        }}
+      >
         {icon}
       </span>
 
@@ -1439,24 +2825,353 @@ function PaymentButton({
   );
 }
 
+// ===========================================================
+// HELPERS
+// ===========================================================
+
+function normalizeStatus(
+  status: string
+) {
+  const value =
+    String(
+      status || ''
+    ).toLowerCase();
+
+  if (
+    value ===
+      'approved' ||
+    value ===
+      'paid' ||
+    value ===
+      'success' ||
+    value ===
+      'completed'
+  ) {
+    return 'paid';
+  }
+
+  if (
+    value ===
+      'rejected' ||
+    value ===
+      'failed' ||
+    value ===
+      'declined'
+  ) {
+    return 'rejected';
+  }
+
+  return 'pending';
+}
+
+function getStatusInfo(
+  status: string
+) {
+  if (
+    status === 'paid'
+  ) {
+    return {
+      label: 'PAID',
+      color:
+        '#34d399',
+      background:
+        'rgba(16,185,129,0.12)',
+      border:
+        '#10b981'
+    };
+  }
+
+  if (
+    status ===
+    'rejected'
+  ) {
+    return {
+      label:
+        'REJECTED',
+      color:
+        '#f87171',
+      background:
+        'rgba(239,68,68,0.12)',
+      border:
+        '#ef4444'
+    };
+  }
+
+  return {
+    label:
+      'PENDING',
+    color:
+      '#fbbf24',
+    background:
+      'rgba(245,158,11,0.12)',
+    border:
+      '#f59e0b'
+  };
+}
+
+function getMethodInfo(
+  method: string,
+  source: 'collection' | 'online'
+) {
+  const value =
+    String(
+      method || ''
+    )
+      .toLowerCase()
+      .replace(
+        /\s/g,
+        ''
+      );
+
+  if (
+    value.includes(
+      'easypaisa'
+    )
+  ) {
+    return {
+      label:
+        'Easypaisa',
+      color:
+        '#34d399',
+      background:
+        'rgba(16,185,129,0.12)'
+    };
+  }
+
+  if (
+    value.includes(
+      'jazz'
+    )
+  ) {
+    return {
+      label:
+        'JazzCash',
+      color:
+        '#f87171',
+      background:
+        'rgba(239,68,68,0.12)'
+    };
+  }
+
+  if (
+    value.includes(
+      'raast'
+    ) ||
+    value.includes(
+      'rast'
+    )
+  ) {
+    return {
+      label:
+        'Raast',
+      color:
+        '#fbbf24',
+      background:
+        'rgba(245,158,11,0.12)'
+    };
+  }
+
+  if (
+    value.includes(
+      'sadapay'
+    )
+  ) {
+    return {
+      label:
+        'SadaPay',
+      color:
+        '#a78bfa',
+      background:
+        'rgba(139,92,246,0.12)'
+    };
+  }
+
+  if (
+    value.includes(
+      'nayapay'
+    )
+  ) {
+    return {
+      label:
+        'NayaPay',
+      color:
+        '#60a5fa',
+      background:
+        'rgba(59,130,246,0.12)'
+    };
+  }
+
+  if (
+    value.includes(
+      'bank'
+    )
+  ) {
+    return {
+      label:
+        'Bank Transfer',
+      color:
+        '#60a5fa',
+      background:
+        'rgba(59,130,246,0.12)'
+    };
+  }
+
+  if (
+    value.includes(
+      'cash'
+    ) ||
+    source ===
+      'collection'
+  ) {
+    return {
+      label:
+        'Cash',
+      color:
+        '#34d399',
+      background:
+        'rgba(16,185,129,0.12)'
+    };
+  }
+
+  return {
+    label:
+      'Online',
+    color:
+      '#38bdf8',
+    background:
+      'rgba(56,189,248,0.12)'
+  };
+}
+
+function formatDate(
+  dateValue: string
+) {
+  if (!dateValue) {
+    return '-';
+  }
+
+  const date =
+    new Date(
+      dateValue
+    );
+
+  if (
+    isNaN(
+      date.getTime()
+    )
+  ) {
+    return dateValue;
+  }
+
+  return date.toLocaleDateString(
+    'en-PK',
+    {
+      day:
+        '2-digit',
+      month:
+        'short',
+      year:
+        'numeric'
+    }
+  );
+}
+
+function formatTime(
+  dateValue: string
+) {
+  if (!dateValue) {
+    return '-';
+  }
+
+  /*
+    payment_date بعض اوقات صرف YYYY-MM-DD ہوتا ہے۔
+    ایسی صورت میں فرضی 5:00 AM وغیرہ دکھانے کے بجائے -- دکھائیں۔
+  */
+
+  if (
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      dateValue
+    )
+  ) {
+    return '--';
+  }
+
+  const date =
+    new Date(
+      dateValue
+    );
+
+  if (
+    isNaN(
+      date.getTime()
+    )
+  ) {
+    return '--';
+  }
+
+  return date.toLocaleTimeString(
+    'en-PK',
+    {
+      hour:
+        '2-digit',
+      minute:
+        '2-digit',
+      hour12:
+        true
+    }
+  );
+}
+
+// ===========================================================
+// STYLES
+// ===========================================================
+
 const labelStyle:
-  React.CSSProperties = {
-  display: 'block',
-  fontSize: '11px',
-  color: '#94a3b8',
-  marginBottom: '5px',
-  fontWeight: 'bold'
-};
+  React.CSSProperties =
+  {
+    display:
+      'block',
+
+    fontSize:
+      '11px',
+
+    color:
+      '#94a3b8',
+
+    marginBottom:
+      '5px',
+
+    fontWeight:
+      'bold'
+  };
 
 const inputStyle:
-  React.CSSProperties = {
-  width: '100%',
-  boxSizing: 'border-box',
-  backgroundColor: '#0f172a',
-  border: '1px solid #3b82f6',
-  color: '#ffffff',
-  padding: '9px 10px',
-  borderRadius: '8px',
-  fontSize: '12px',
-  outline: 'none'
-};
+  React.CSSProperties =
+  {
+    width:
+      '100%',
+
+    boxSizing:
+      'border-box',
+
+    backgroundColor:
+      '#0f172a',
+
+    border:
+      '1px solid #3b82f6',
+
+    color:
+      '#ffffff',
+
+    padding:
+      '9px 10px',
+
+    borderRadius:
+      '8px',
+
+    fontSize:
+      '12px',
+
+    outline:
+      'none'
+  };
